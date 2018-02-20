@@ -1,0 +1,213 @@
+---
+
+# Playbook which installs RHMAP Core RHMAP MbaaS from fh-core-openshift-templates
+# and then creates the MBaaS target & Environment via fhc
+
+- name: "Clean up of existing projects"
+  hosts: master
+  vars_files:
+    - "../roles/preflight_checks/vars/nightly.yml"
+  roles:
+    - { role: login, updating: false, project_name: "{{ core_project_name }}" }
+  tasks:
+    -
+      name: "List RHMAP Environments on OpenShift cluster"
+      shell: "oc get projects | awk '{print $1}' | grep rhmap-{{ core_project_name }}"
+      register: listed_environments
+      ignore_errors: true
+
+    -
+      name: "Delete RHMAP Environments if some exist"
+      command: "oc delete project {{ item }}"
+      register: output
+      when: listed_environments.stdout
+      with_items: "{{ listed_environments.stdout_lines }}"
+      ignore_errors: true
+
+    -
+      name: "Delete existing RHMAP Core project in OpenShift"
+      command: "oc delete project {{ core_project_name }}"
+      register: output
+      ignore_errors: true
+
+    -
+      name: "Delete existing RHMAP MBaaS project in OpenShift"
+      command: "oc delete project {{ mbaas_project_name }}"
+      register: output
+      ignore_errors: true
+
+    -
+      name: "Pause to release pvc"
+      pause:
+        minutes: 1
+
+    -
+      name: "Clean previously created secrets/repos if they already exist"
+      file:
+        state: absent
+        path: "{{ item }}"
+      with_items:
+        - "{{ core_templates_dir }}"
+        - "{{ mbaas_templates_dir }}"
+
+    -
+      set_fact:
+        git_host: "git-proxied"
+      when: proxy_url is defined
+
+    -
+      name: "Clone Core templates from Git repo"
+      git: repo="{{ git_host | default('git@github.com') }}:{{ core_templates_git_path }}"
+           version="{{ core_templates_git_ref | default('master') }}"
+           key_file="{{ ssh_keyfile_location }}"
+           dest="{{ core_templates_dir }}"
+           accept_hostkey=True
+           force=yes
+           update=no
+
+
+    -
+      name: "Clone MBaaS templates from Git repo"
+      git: repo="{{ git_host | default('git@github.com') }}:{{ mbaas_templates_git_path }}"
+           version="{{ mbaas_templates_git_ref | default('master') }}"
+           key_file="{{ ssh_keyfile_location }}"
+           dest="{{ mbaas_templates_dir }}"
+           accept_hostkey=True
+           force=yes
+           update=no
+
+    -
+      name: "Copy anyuid-scc template if it exists"
+      copy:
+        src: "{{ core_templates_dir }}/gitlab-shell/scc-anyuid-with-chroot.json"
+        dest: "{{ core_templates_dir }}/generated/scc-anyuid-with-chroot.json"
+        remote_src: true
+      register: file_result
+      ignore_errors: true
+
+    -
+      # Pointing to the directory where the templates are generated
+      set_fact:
+        core_templates_dir: "{{ core_templates_dir }}/generated"
+
+- name: "Install RHMAP Core on Openshift (nightly)"
+  hosts: master
+  roles:
+    - { role: deploy-core, project_name: "{{ core_project_name }}", domain_name: "{{ core_project_name }}", git_external_protocol: "http", tags: deploy }
+  vars_files:
+    - "../roles/preflight_checks/vars/nightly.yml"
+
+- name: "Install RHMAP MBaaS on Openshift (nightly)"
+  hosts: master
+  roles:
+    - { role: deploy-mbaas, project_name: "{{ mbaas_project_name }}", tags: deploy }
+  vars_files:
+    - "../roles/preflight_checks/vars/nightly.yml"
+
+- name: Get the facts for setting up MBaaS Target & Environment
+  hosts: master
+  tags: final_setup
+  vars_files:
+    - "../roles/preflight_checks/vars/nightly.yml"
+  tasks:
+    - name: Get RHMAP Core studio URL
+      command: oc get route rhmap --template={% raw %}"{{ .spec.host }}"{% endraw %} -n {{ core_project_name | default('rhmap-core') }}
+      register: output
+
+    - set_fact:
+        studio_url: "{{ output.stdout }}"
+
+    - name: "Get RHMAP Core admin username"
+      shell: "oc env dc/millicore --list --all -n {{ core_project_name }} | grep 'FH_ADMIN_USER_NAME' | cut -d'=' -f2"
+      register: output
+
+    - set_fact:
+        user: "{{ output.stdout }}"
+
+    - name: "Get RHMAP Core admin password"
+      shell: "oc env dc/millicore --list --all -n {{ core_project_name }} | grep 'FH_ADMIN_USER_PASSWORD' | cut -d'=' -f2"
+      register: output
+
+    - set_fact:
+        password: "{{ output.stdout }}"
+
+    -
+      name: "Get the MBaaS service key"
+      shell: "oc env dc/fh-mbaas --list --all -n {{ mbaas_project_name }} | grep 'FHMBAAS_KEY' | cut -d'=' -f2"
+      register: output
+
+    - set_fact:
+        mbaas_key: "{{ output.stdout }}"
+
+    -
+      debug:
+        msg: "Studio password for {{ user }} is {{ password }}"
+
+
+    -
+      name: "Authenticate to the RHMAP cluster"
+      uri:
+        url: "https://{{ studio_url }}/box/srv/1.1/act/sys/auth/login"
+        method: POST
+        body: '{"u":"{{ user }}","p":"{{ password }}"}'
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        validate_certs: no
+      register: login
+      failed_when: login.json.responses.local.status != 'ok'
+
+    -
+      name: "Create the MBaaS target"
+      environment:
+        http_proxy: "{{ proxy_url | default('') }}"
+        https_proxy: "{{ proxy_url | default('') }}"  
+      uri:
+        url: "https://{{ studio_url }}/api/v2/mbaases"
+        method: POST
+        body: '{"fhMbaasHost":"https://mbaas-{{ mbaas_project_name | default("rhmap-1-node-mbaas") }}.{{ hostname }}","type":"openshift3","_id":"{{ mbaas_project_name }}","label":"{{ mbaas_project_name }}","url":"https://{{ hostname }}:8443","routerDNSUrl":"*.{{ hostname }}","servicekey":" {{ mbaas_key }}"}'
+        headers:
+          Content-Type: "application/json"
+          Cookie: "feedhenry={{ login.json.login }}; csrf={{ login.json.csrf }};"
+          X-CSRF-Token: "{{ login.json.csrf }}"
+        body_format: json
+        validate_certs: no
+        status_code: 200,409
+      register: create
+
+    -
+      name: "Fetch OpenShift token"
+      command: oc whoami -t
+      register: os_token
+
+    -
+      name: "Create Environments"
+      environment:
+        http_proxy: "{{ proxy_url | default('') }}"
+        https_proxy: "{{ proxy_url | default('') }}"
+      uri:
+        url: "https://{{ studio_url }}/api/v2/environments"
+        method: POST
+        body: '{"id":"{{ item.id }}","label":"{{ item.label }}","target":"{{ mbaas_project_name }}","targetType":"openshift3","token":"{{ os_token.stdout }}"}'
+        headers:
+          Content-Type: "application/json"
+          Cookie: "feedhenry={{ login.json.login }}; csrf={{ login.json.csrf }};"
+          X-CSRF-Token: "{{ login.json.csrf }}"
+        body_format: json
+        validate_certs: no
+        status_code: 200,409,500
+        register: create_env
+        failed_when: create_env.stderr != '' and 'already exists' not in create_env.stderr
+      with_items:
+        - { id: 'dev', label: 'Development' }
+        - { id: 'live', label: 'Live' }
+
+    -
+      name: "Copy required variables to file for further use"
+      local_action:
+        shell echo "{{ item }}" >> ../"{{ pipeline_variables_filename }}"
+      with_items:
+        - 'env.MBAAS_SERVICE_KEY=\"{{ mbaas_key }}\"'
+        - 'env.CORE_USERNAME=\"{{ user }}\"'
+        - 'env.CORE_PASSWORD=\"{{ password }}\"'
+      when: pipeline_variables_filename is defined

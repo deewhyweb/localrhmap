@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: AeroGear
+  company: AeroGear
+  description: "Roles for deploying the AeroGear digger"
+  issue_tracker_url: https://issues.jboss.org/projects/AGDIGGER/issues
+  license: "license (Apache 2)"
+  min_ansible_version: "2.2.0"
+  platforms:
+    -
+      name: fedora
+      version:
+        - 25

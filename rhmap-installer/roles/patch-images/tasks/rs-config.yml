@@ -1,0 +1,161 @@
+---
+
+-
+  name: "Get Mongo pod ID"
+  command: bash -c "oc get po --namespace {{ project_name }} | grep Running | grep mongodb | awk '{print $1}'"
+  register: mongo_pods
+
+-
+  name: "Get Mongo primary"
+  command: bash -c "oc --namespace {{ project_name }} rsh {{mongo_pods.stdout_lines[0]}} \"/bin/bash\" \"-c\" \"mongo admin -u admin -p {{admin_password.stdout}} --quiet --eval '(db.isMaster().primary)'\""
+  register: primary
+
+-
+  name: "Set primary service name"
+  set_fact:
+    original_primary: "{{ primary.stdout.split('.')[0] }}"
+
+-
+  name: "Set primary pod name"
+  when: "'{{ original_primary }}' in '{{ item }}'"
+  set_fact:
+    original_primary_pod: "{{ item }}"
+  with_items:
+    "{{ mongo_pods.stdout_lines | default([])}}"
+
+
+-
+  name: "Copy deployment configs to file"
+  shell: oc --namespace {{ project_name }} get dc/mongodb-{{item}} -o json > /tmp/mongodb-{{item}}.json
+  with_sequence: start=1 end={{ mongo_replicas | default(1) }}
+
+-
+  name: "Read mongo definition"
+  set_fact:
+    mongo_image_def: "{{ deployments | selectattr('name', 'match', '^mongodb-1$') | map(attribute='containers') | list }}"
+
+-
+  name: "Get image version"
+  set_fact:
+    mongo_image: "{{ mongo_image_def[0][0].image }}"
+
+-
+  name: 'Update image names in new dc'
+  replace:
+    dest: /tmp/mongodb-{{item}}.json
+    regexp: 'rhmap[0-9][0-9]\/mongodb:[0-9\.-]*'
+    replace: '{{ mongo_image }}'
+    backup: no
+  with_sequence: start=1 end={{ mongo_replicas | default(1) }}
+
+- 
+  name: "Add new entrypoint command to new dc"
+  blockinfile:
+    dest: /tmp/mongodb-{{item}}.json
+    marker: ""
+    insertafter: '"image": "{{ mongo_image }}",'
+    content: |
+      "command": ["run-mongod-replication"],
+  when: upgrade_to_version | float  == 4.5
+  with_sequence: start=1 end={{ mongo_replicas | default(1) }}
+
+-
+  include: mongo-poller.yml rsh_pod={{ original_primary_pod }}
+  with_items:
+    - mongodb-1
+    - mongodb-2
+    - mongodb-3
+  when: 
+    - item != original_primary
+
+- name: "Waiting for all replica set members before election"
+  pause: 
+    seconds: 60
+
+# this will return an error when successful, this is expected mongo behaviour 
+-
+  name: "Force election *** PLEASE NOTE: IGNORE MONGO NETWORK ERRORS - EXPECTED BEHAVIOUR ***"
+  command: bash -c "oc --namespace {{ project_name }} rsh {{original_primary_pod}} \"/bin/bash\" \"-c\" \"mongo admin -u admin -p {{admin_password.stdout}} --quiet --eval '(rs.stepDown())'\""
+  ignore_errors: true
+  no_log: True
+  failed_when: False
+
+- name: "Waiting for new primary"
+  pause:
+    seconds: 60
+
+-
+  name: "Get new Mongo pod ID"
+  command: bash -c "oc get po --namespace {{ project_name }} | grep Running | grep mongodb | awk '{print $1}'"
+  register: new_mongo_pods
+
+-
+  name: "Get new Mongo primary"
+  command: bash -c "oc --namespace {{ project_name }} rsh {{new_mongo_pods.stdout_lines[0]}} \"/bin/bash\" \"-c\" \"mongo admin -u admin -p {{admin_password.stdout}} --quiet --eval '(db.isMaster().primary)'\""
+  register: new_primary
+
+-
+  name: "Set new primary service name"
+  set_fact:
+    upgraded_primary: "{{ new_primary.stdout.split('.')[0] }}"
+
+-
+  name: "Set new primary pod name"
+  when: upgraded_primary in item
+  set_fact:
+    new_primary_pod: "{{ item }}"
+  with_items:
+    "{{ new_mongo_pods.stdout_lines | default([]) }}"
+
+-
+  include: mongo-poller.yml rsh_pod={{ new_primary_pod }}
+  with_items:
+    - "{{ original_primary | default('') }}"
+
+# final refresh of the pods to get updated list after the poller redeploys
+
+-
+  name: "Get new Mongo pod ID"
+  command: bash -c "oc get po --namespace {{ project_name }} | grep Running | grep mongodb | awk '{print $1}'"
+  register: new_mongo_pods
+
+-
+  name: "Get new Mongo primary"
+  command: bash -c "oc --namespace {{ project_name }} rsh {{new_mongo_pods.stdout_lines[0]}} \"/bin/bash\" \"-c\" \"mongo admin -u admin -p {{admin_password.stdout}} --quiet --eval '(db.isMaster().primary)'\""
+  register: new_primary
+
+-
+  name: "Set new primary service name"
+  set_fact:
+    upgraded_primary: "{{ new_primary.stdout.split('.')[0] }}"
+
+-
+  name: "Set new primary pod name"
+  when: upgraded_primary in item
+  set_fact:
+    new_primary_pod: "{{ item }}"
+  with_items:
+    "{{ new_mongo_pods.stdout_lines | default([]) }}"
+
+-
+  name: "Update replica set configuration"
+  command: bash -c "oc --namespace {{ project_name }} rsh {{ item }} \"/bin/bash\" \"-c\" \"mongo admin -u admin -p {{admin_password.stdout}} --quiet --eval '(rs.reconfig(rs.config(), {force{{ ":" }} true}))'\""
+  with_items:
+    - "{{ new_mongo_pods.stdout_lines | default([]) }}"
+  when:
+    - item != new_primary_pod
+
+- 
+  name: "Check if replica primary is stable"
+  action: shell bash -c "oc --namespace {{ project_name }} rsh {{new_primary_pod}} \"/bin/bash\" \"-c\" \"mongo admin -u admin -p {{admin_password.stdout}} --quiet --eval '(rs.status())'\""
+  register: result
+  until: "'PRIMARY' in result.stdout"
+  retries: "{{ retry_limit }}"
+  delay: "{{ interval }}"
+
+- name: "Check if replica secondaries are stable"
+  action: shell bash -c "oc --namespace {{ project_name }} rsh {{new_primary_pod}} \"/bin/bash\" \"-c\" \"mongo admin -u admin -p {{admin_password.stdout}} --quiet --eval 'rs.reconfig(rs.config()); rs.status()'\" " | grep -c SECONDARY""
+  register: result
+  until: result.stdout.find('2') != -1
+  retries: "{{ retry_limit }}"
+  delay: "{{ interval }}"

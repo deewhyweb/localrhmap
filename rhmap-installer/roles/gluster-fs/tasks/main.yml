@@ -1,0 +1,34 @@
+---
+
+-
+  name: Create project
+  command: "oc new-project {{ project_name }}"
+  register: output
+  failed_when: output.stderr != '' and 'already exists' not in output.stderr
+  changed_when: output.rc == 0
+
+-
+  name: Create service definition
+  template:
+    src: gluster-service.j2
+    dest: /tmp/gluster-service.yml
+
+-
+  name: Create gluster-fs service in project
+  command: "oc create -f /tmp/gluster-service.yml -n {{ project_name}}"
+  register: svc_output
+  failed_when: svc_output.stderr != '' and 'already exists' not in svc_output.stderr
+  changed_when: svc_output.rc == 0
+
+-
+  name: Create endpoint definition
+  template:
+    src: gluster-endpoints.j2
+    dest: /tmp/gluster-endpoints.yml
+
+-
+  name: Create gluster-fs endpoints in project
+  command: "oc create -f /tmp/gluster-endpoints.yml -n {{ project_name}}"
+  register: ep_output
+  failed_when: ep_output.stderr != '' and 'already exists' not in ep_output.stderr
+  changed_when: ep_output.rc == 0

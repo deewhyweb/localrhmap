@@ -1,0 +1,65 @@
+{
+  "kind": "ImageStreamList",
+  "apiVersion": "v1",
+  "metadata": {},
+  "items": [
+    {
+      "kind": "ImageStream",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nodejs",
+        "annotations": {
+          "openshift.io/display-name": "Node.js"
+        }
+      },
+      "spec": {
+        "tags": [
+          {
+            "name": "latest",
+            "annotations": {
+              "openshift.io/display-name": "Node.js (Latest)",
+              "description": "Build and run Node.js applications on rhel 7. WARNING: By selecting this tag, your application will automatically update to use the latest version of Node.js available on OpenShift, including major versions updates.",
+              "iconClass": "icon-nodejs",
+              "tags": "builder,nodejs",
+              "supports":"nodejs"
+            },
+            "from": {
+              "kind": "ImageStreamTag",
+              "name": "6"
+            }
+          },
+          {
+            "name": "4",
+            "annotations": {
+              "openshift.io/display-name": "Node.js 4",
+              "description": "Build and run Node.js 4 applications on rhel 7.",
+              "iconClass": "icon-nodejs",
+              "tags": "builder,nodejs",
+              "supports":"nodejs:4,nodejs",
+              "version": "4"
+            },
+            "from": {
+              "kind": "DockerImage",
+              "name": "registry.access.redhat.com/rhscl/nodejs-4-rhel7"
+            }
+          },
+          {
+            "name": "6",
+            "annotations": {
+              "openshift.io/display-name": "Node.js 6",
+              "description": "Build and run Node.js 6 applications on rhel 7.",
+              "iconClass": "icon-nodejs",
+              "tags": "builder,nodejs",
+              "supports":"nodejs:6,nodejs",
+              "version": "6"
+            },
+            "from": {
+              "kind": "DockerImage",
+              "name": "registry.access.redhat.com/rhscl/nodejs-6-rhel7"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

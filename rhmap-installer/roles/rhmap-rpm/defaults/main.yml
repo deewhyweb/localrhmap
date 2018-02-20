@@ -1,0 +1,12 @@
+---
+
+packages:
+ -
+  repo: "rhel-7-server-optional-rpms"
+  name: "subscription-manager-plugin-container"
+
+ -
+  repo: "rhel-7-server-rhmap-{{ rhmap_version | default('4.5') }}-rpms"
+  name: "rhmap-fh-openshift-templates"
+
+release: "latest" # installed or latest

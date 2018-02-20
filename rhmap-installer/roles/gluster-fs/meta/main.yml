@@ -1,0 +1,4 @@
+---
+
+dependencies:
+  - { role: login, updating: false }

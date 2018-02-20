@@ -1,0 +1,7 @@
+---
+
+- name: "Red Hat Subscription Manager"
+  hosts: all
+  remote_user: root
+  roles:
+    - {role: register, tags: register}

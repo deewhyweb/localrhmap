@@ -1,0 +1,13 @@
+---
+
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: {{ gluster_metadata_name }}
+subsets:
+{% for item in gluster_endpoints %}
+  - addresses:
+      - ip: {{ item }}
+    ports:
+      - port: 1
+{% endfor %}

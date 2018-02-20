@@ -1,0 +1,190 @@
+---
+
+# This upgrade includes a mongodb image change. The recommended method for upgrading can be found here https://docs.mongodb.com/manual/release-notes/3.2-upgrade-replica-set
+# The logic is as follows :-
+#   find primary node
+#   find secondary node
+#   replace the image
+#   execute replicaset reconfig on the primary
+#   find the next secondary
+#   replace the image
+#   execute replicaset reconfig on the primary
+#   force and election (downgrade primary)
+#   find the new primary
+#   replace the old primary
+#   execute replicaset reconfig on the new primary
+
+-
+  name: "Include release specific image versions"
+  include_vars: ../../../shared_files/{{ rhmap_version }}.yml
+
+-
+  name: "Get existing mongodb_admin_password"
+  command: oc get configmaps mongo-config -o jsonpath="{.data['mongodb-admin-password']}" --namespace {{ project_name }}
+  register: admin_password
+  no_log: True
+  changed_when: False
+
+-
+  name: "Get existing mongodb-keyfile-value"
+  command: oc get configmaps mongo-config -o jsonpath="{.data['mongodb-keyfile-value']}" --namespace {{ project_name }}
+  register: keyfile_value
+  no_log: True
+  changed_when: False
+
+-
+  name: "Get existing mongodb-service-name"
+  command: oc get configmaps mongo-config -o jsonpath="{.data['mongodb-service-name']}" --namespace {{ project_name }}
+  register: service_name
+  changed_when: False
+
+-
+  name: "Get existing mongodb-fhmbaas-user"
+  command: oc get configmaps mongo-config -o jsonpath="{.data['mongodb-fhmbaas-user']}" --namespace {{ project_name }}
+  register: fhmbaas_user
+  changed_when: False
+
+-
+  name: "Get existing mongodb-fhmbaas-password"
+  command: oc get configmaps mongo-config -o jsonpath="{.data['mongodb-fhmbaas-password']}" --namespace {{ project_name }}
+  register: fhmbaas_password
+  no_log: True
+  changed_when: False
+
+-
+  name: "Get existing mongodb-fhmbaas-database"
+  command: oc get configmaps mongo-config -o jsonpath="{.data['mongodb-fhmbaas-database']}" --namespace {{ project_name }}
+  register: fhmbaas_database
+  changed_when: False
+
+-
+  name: "Get existing mongodb-fhreporting-user"
+  command: oc get configmaps mongo-config -o jsonpath="{.data['mongodb-fhreporting-user']}" --namespace {{ project_name }}
+  register: fhreporting_user
+  changed_when: False
+
+-
+  name: "Get existing mongodb-fhreporting-password"
+  command: oc get configmaps mongo-config -o jsonpath="{.data['mongodb-fhreporting-password']}" --namespace {{ project_name }}
+  register: fhreporting_password
+  no_log: True
+  changed_when: False
+
+-
+  name: "Get existing mongodb-fhreporting-database"
+  command: oc get configmaps mongo-config -o jsonpath="{.data['mongodb-fhreporting-database']}" --namespace {{ project_name }}
+  register: fhreporting_database
+  changed_when: False
+  
+-
+  name: "Get existing mongodb-form-password"
+  command: oc get configmaps mongo-config -o jsonpath="{.data['mongodb-form-password']}" --namespace {{ project_name }}
+  register: mongodb_form_password
+  no_log: True
+  changed_when: False
+
+-
+  name: "Get Mongo replicaset name or null if single node"
+  command: oc get configmaps mongo-config -o jsonpath="{.data['mongodb-replica-name']}" --namespace {{ project_name }}
+  register: replicaset_name
+  changed_when: False
+  
+-
+  name: "Get MBaaS service names"
+  command:  oc get svc -o jsonpath='{.items[*].metadata.name}' --namespace {{ project_name }}
+  register: svc_output
+  changed_when: False
+
+- 
+  name: "Add project name to services"
+  set_fact:
+    no_proxy_config_map: "{{svc_output.stdout | regex_replace(' ', '.' + project_name + ',')}}" 
+
+-
+  name: "Append project name to last service"
+  set_fact:
+    no_proxy_config_map: "{{no_proxy_config_map + '.' + project_name}}"
+
+- 
+  name: "Check if config map is populated"
+  command: oc get configmap mongo-config --namespace {{ project_name }}
+  register: config_map_check
+  changed_when: False
+  failed_when: False
+
+-
+  name: "Create RHMAP MBaaS configuration"
+  command: "oc new-app -f {{ mbaas_templates_dir | default('/opt/rhmap/4.5/templates/mbaas') }}/rhmap-mbaas-config.json \
+            --namespace {{ project_name }} \
+            -p MONGODB_ADMIN_PASSWORD={{admin_password.stdout}} \
+            -p MONGODB_KEYFILE_VALUE={{keyfile_value.stdout}} \
+            -p MONGODB_SERVICE_NAME={{service_name.stdout}} \
+            -p MONGODB_FHMBAAS_USER={{fhmbaas_user.stdout}} \
+            -p MONGODB_FHMBAAS_PASSWORD={{fhmbaas_password.stdout}} \
+            -p MONGODB_FHMBAAS_DATABASE={{fhmbaas_database.stdout}} \
+            -p MONGODB_FHREPORTING_USER={{fhreporting_user.stdout}} \
+            -p MONGODB_FHREPORTING_PASSWORD={{fhreporting_password.stdout}} \
+            -p MONGODB_FHREPORTING_DATABASE={{fhreporting_database.stdout}} \
+            -p MONGODB_REPLICA_NAME={{replicaset_name.stdout}} \
+            -p MONGODB_FORM_PASSWORD={{mongodb_form_password.stdout}} \
+            -p PROJECT_NAME={{ project_name }}" 
+  when: config_map_check.rc != 0
+  register: config_output
+  failed_when: config_output.rc != 0 and config_output.stderr != '' and 'already exists' not in config_output.stderr
+  changed_when: config_output.rc == 0
+
+  # Could we consider doing this for a later release - it re-deploys the mongodb pods the replicaset config is lost
+  # -
+  #   name: "Update existing Mongo DeploymentConfig objects to read environment from ConfigMap"
+  #   command: oc env --from=configmap/mongo-config dc/mongodb-{{ item }} MONGODB_FHSTATSD_USER- MONGODB_FHSTATSD_PASSWORD- MONGODB_FHSTATSD_DATABASE- FHMBAAS_KEY- --overwrite=true
+  #   with_sequence: start=1 end={{ mongo_replicas }}
+  
+-  
+  name: "Update existing node-proxy ConfigMap object to the service & project name"
+  command: 'oc patch configmap node-proxy --type=''json'' -p=''[{"op": "replace", "path": "/data/no-proxy", "value": "{{ no_proxy_config_map }}" }]'' --namespace {{ project_name}} '
+
+- 
+  name: "Run oc version on server"
+  shell: 'oc version | grep openshift '
+  register: oc_output
+
+-
+  name: "Store the full oc version"
+  set_fact: 
+    current_oc_version: "{{oc_output.stdout}}"
+
+-
+  name: "Extract oc version number"
+  set_fact:
+    version_number: "{{ current_oc_version | regex_replace('openshift v') }}"
+
+-
+  name: "Update MBaaS components to read environment from ConfigMap *** PLEASE NOTE : This will not happen for OSCP version < 3.4"
+  command: oc env --from=configmap/mongo-config dc/{{ item }} --overwrite=true --namespace {{ project_name }}
+  with_items: ["fh-mbaas", "fh-metrics", "fh-messaging"]
+  when: version_number | version_compare('3.4', '>=')
+  
+  
+- include: ../../tasks/poller.yml
+
+-
+  name: "set fact"
+  set_fact:
+    updating: true
+
+-
+  name: "Set MBaaS Component Liveness Probes"
+  command: "oc set probe dc/{{ item }} --liveness --get-url=http://:8080/sys/info/ping --initial-delay-seconds=50 --timeout-seconds=5 --period-seconds=60 --success-threshold=1 --failure-threshold=2 --namespace={{ project_name }}"
+  register: component_liveness_probe
+  with_items: ["fh-statsd", "fh-metrics", "fh-messaging", "fh-mbaas"]
+
+- include: ../../tasks/poller.yml
+
+-
+  name: "Set MBaaS Component Readiness Probes"
+  command: "oc set probe dc/{{ item }} --readiness --get-url=http://:8080/sys/info/ping --initial-delay-seconds=50 --timeout-seconds=5 --period-seconds=10 --success-threshold=1 --failure-threshold=1 --namespace={{ project_name }}"
+  register: component_readiness_probe
+  with_items: ["fh-statsd", "fh-metrics", "fh-messaging", "fh-mbaas"]
+
+
+- include: ../../tasks/poller.yml

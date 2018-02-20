@@ -1,0 +1,1232 @@
+{
+  "kind": "Template",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "fh-mbaas",
+    "annotations": {
+      "templateVersion": "0.26.83-redhat-15",
+      "description": "Red Hat Mobile Backend as a Service template",
+      "iconClass": "icon-nodejs"
+    }
+  },
+  "objects": [
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-mbaas-service",
+        "labels": {
+          "name": "fh-mbaas-service"
+        },
+        "annotations": {
+          "service.alpha.openshift.io/dependencies": "[{\"name\":\"mongodb-1\",\"namespace\":\"\",\"kind\":\"Service\"},{\"name\":\"fh-messaging-service\",\"namespace\":\"\",\"kind\":\"Service\"},{\"name\":\"fh-metrics-service\",\"namespace\":\"\",\"kind\":\"Service\"},{\"name\":\"fh-statsd-service\",\"namespace\":\"\",\"kind\":\"Service\"}]"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "port": 8080
+          }
+        ],
+        "selector": {
+          "name": "fh-mbaas"
+        }
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-messaging-service",
+        "labels": {
+          "name": "fh-messaging-service"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "port": 8080
+          }
+        ],
+        "selector": {
+          "name": "fh-messaging"
+        }
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-metrics-service",
+        "labels": {
+          "name": "fh-metrics-service"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "port": 8080
+          }
+        ],
+        "selector": {
+          "name": "fh-metrics"
+        }
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-statsd-service",
+        "labels": {
+          "name": "fh-statsd-service"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "name": "tcp",
+            "protocol": "TCP",
+            "port": 8080,
+            "targetPort": 8080
+          },
+          {
+            "name": "udp",
+            "protocol": "UDP",
+            "port": 8081,
+            "targetPort": 8081
+          }
+        ],
+        "selector": {
+          "name": "fh-statsd"
+        }
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nagios",
+        "labels": {
+          "name": "nagios"
+        },
+        "creationTimestamp": null
+      },
+      "spec": {
+        "ports": [
+          {
+            "protocol": "TCP",
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ],
+        "selector": {
+          "name": "nagios"
+        },
+        "type": "ClusterIP",
+        "sessionAffinity": "None"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "kind": "ServiceAccount",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nagios"
+      }
+    },
+    {
+      "kind": "RoleBinding",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nagiosadmin"
+      },
+      "subjects": [
+        {
+          "kind": "ServiceAccount",
+          "name": "nagios"
+        }
+      ],
+      "roleRef": {
+        "name": "admin"
+      }
+    },
+    {
+      "kind": "PersistentVolumeClaim",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nagios-claim-1"
+      },
+      "spec": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "resources": {
+          "requests": {
+            "storage": "1Gi"
+          }
+        }
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-mbaas",
+        "labels": {
+          "name": "fh-mbaas"
+        }
+      },
+      "spec": {
+        "strategy": {
+          "type": "Rolling",
+          "resources": {
+            "limits": {
+              "cpu": "800m",
+              "memory": "800Mi"
+            },
+            "requests": {
+              "cpu": "200m",
+              "memory": "200Mi"
+            }
+          }
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": "${FH_MBAAS_REPLICAS}",
+        "selector": {
+          "name": "fh-mbaas"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "name": "fh-mbaas"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "fh-mbaas",
+                "image": "${FH_MBAAS_IMAGE}:${FH_MBAAS_IMAGE_VERSION}",
+                "ports": [
+                  {
+                    "containerPort": 8080
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "MBAAS_NAMESPACE",
+                    "valueFrom": {
+                      "fieldRef": {
+                        "fieldPath": "metadata.namespace"
+                      }
+                    }
+                  },
+                  {
+                    "name": "FH_CLUSTER",
+                    "value": "${FH_CLUSTER}"
+                  },
+                  {
+                    "name": "FH_MBAASID",
+                    "value": "${FH_MBAASID}"
+                  },
+                  {
+                    "name": "FHMBAAS_KEY",
+                    "value": "${FHMBAAS_KEY}"
+                  },
+                  {
+                    "name": "MONGODB_REPLICA_NAME",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-replica-name"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHMBAAS_USER",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhmbaas-user"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHMBAAS_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhmbaas-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHMBAAS_DATABASE",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhmbaas-database"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_ADMIN_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-admin-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FORM_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-form-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "FH_METRICS_API_KEY",
+                    "description": "API Key for calling fh-metrics",
+                    "value": "${FH_METRICS_API_KEY}"
+                  },
+                  {
+                    "name": "FH_MESSAGING_API_KEY",
+                    "description": "API Key for calling fh-messaging",
+                    "value": "${FH_MESSAGING_API_KEY}"
+                  },
+                  {
+                    "name": "FH_STATSD_API_KEY",
+                    "description": "API Key for calling fh-statsd",
+                    "value": "${FH_STATSD_API_KEY}"
+                  },
+                  {
+                    "name": "FH_LOG_LEVEL",
+                    "value": "${FH_DEFAULT_LOG_LEVEL}"
+                  },
+                  {
+                    "name": "HTTPS_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "https-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "HTTP_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "http-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "NO_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "no-proxy"
+                      }
+                    }
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "800m",
+                    "memory": "800Mi"
+                  },
+                  "requests": {
+                    "cpu": "200m",
+                    "memory": "200Mi"
+                  }
+                },
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 55,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "failureThreshold": 2
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "failureThreshold": 1
+                },
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "volumes": [
+              {
+                "name": "node-proxy",
+                "configMap": {
+                  "name": "node-proxy"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-messaging",
+        "labels": {
+          "name": "fh-messaging"
+        }
+      },
+      "spec": {
+        "strategy": {
+          "type": "Rolling",
+          "resources": {
+            "limits": {
+              "cpu": "400m",
+              "memory": "400Mi"
+            },
+            "requests": {
+              "cpu": "200m",
+              "memory": "200Mi"
+            }
+          }
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": "${FH_MESSAGING_REPLICAS}",
+        "selector": {
+          "name": "fh-messaging"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "name": "fh-messaging"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "fh-messaging",
+                "image": "${FH_MESSAGING_IMAGE}:${FH_MESSAGING_IMAGE_VERSION}",
+                "ports": [
+                  {
+                    "containerPort": 8080
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "FH_MESSAGING_CRON",
+                    "value": "10 0 * * *"
+                  },
+                  {
+                    "name": "MONGODB_REPLICA_NAME",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-replica-name"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_USER",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhreporting-user"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhreporting-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_DATABASE",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhreporting-database"
+                      }
+                    }
+                  },
+                  {
+                    "name": "FH_MESSAGING_API_KEY",
+                    "description": "API Key for calling fh-messaging",
+                    "value": "${FH_MESSAGING_API_KEY}"
+                  },
+                  {
+                    "name": "FH_LOG_LEVEL",
+                    "value": "${FH_DEFAULT_LOG_LEVEL}"
+                  },
+                  {
+                    "name": "HTTPS_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "https-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "HTTP_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "http-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "NO_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "no-proxy"
+                      }
+                    }
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "400m",
+                    "memory": "400Mi"
+                  },
+                  "requests": {
+                    "cpu": "200m",
+                    "memory": "200Mi"
+                  }
+                },
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 55,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "failureThreshold": 2
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "failureThreshold": 1
+                },
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "volumes": [
+              {
+                "name": "node-proxy",
+                "configMap": {
+                  "name": "node-proxy"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-metrics",
+        "labels": {
+          "name": "fh-metrics"
+        }
+      },
+      "spec": {
+        "strategy": {
+          "type": "Rolling",
+          "resources": {
+            "limits": {
+              "cpu": "400m",
+              "memory": "400Mi"
+            },
+            "requests": {
+              "cpu": "200m",
+              "memory": "200Mi"
+            }
+          }
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": "${FH_METRICS_REPLICAS}",
+        "selector": {
+          "name": "fh-metrics"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "name": "fh-metrics"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "fh-metrics",
+                "image": "${FH_METRICS_IMAGE}:${FH_METRICS_IMAGE_VERSION}",
+                "ports": [
+                  {
+                    "containerPort": 8080
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "FH_MBAASID",
+                    "value": "${FH_MBAASID}"
+                  },
+                  {
+                    "name": "MONGODB_REPLICA_NAME",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-replica-name"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_USER",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhreporting-user"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhreporting-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_DATABASE",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhreporting-database"
+                      }
+                    }
+                  },
+                  {
+                    "name": "FH_METRICS_API_KEY",
+                    "description": "API Key for calling fh-metrics",
+                    "value": "${FH_METRICS_API_KEY}"
+                  },
+                  {
+                    "name": "FH_LOG_LEVEL",
+                    "value": "${FH_DEFAULT_LOG_LEVEL}"
+                  },
+                  {
+                    "name": "HTTPS_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "https-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "HTTP_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "http-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "NO_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "no-proxy"
+                      }
+                    }
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "400m",
+                    "memory": "400Mi"
+                  },
+                  "requests": {
+                    "cpu": "200m",
+                    "memory": "200Mi"
+                  }
+                },
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 55,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "failureThreshold": 2
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "failureThreshold": 1
+                },
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "volumes": [
+              {
+                "name": "node-proxy",
+                "configMap": {
+                  "name": "node-proxy"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-statsd",
+        "labels": {
+          "name": "fh-statsd"
+        }
+      },
+      "spec": {
+        "strategy": {
+          "type": "Rolling",
+          "resources": {
+            "limits": {
+              "cpu": "400m",
+              "memory": "400Mi"
+            },
+            "requests": {
+              "cpu": "200m",
+              "memory": "200Mi"
+            }
+          }
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": 1,
+        "selector": {
+          "name": "fh-statsd"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "name": "fh-statsd"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "fh-statsd",
+                "image": "${FH_STATSD_IMAGE}:${FH_STATSD_IMAGE_VERSION}",
+                "ports": [
+                  {
+                    "containerPort": 8080
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "FH_STATSD_API_KEY",
+                    "description": "API Key for calling fh-statsd",
+                    "value": "${FH_STATSD_API_KEY}"
+                  },
+                  {
+                    "name": "FH_LOG_LEVEL",
+                    "value": "${FH_DEFAULT_LOG_LEVEL}"
+                  },
+                  {
+                    "name": "HTTPS_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "https-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "HTTP_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "http-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "NO_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "no-proxy"
+                      }
+                    }
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "400m",
+                    "memory": "400Mi"
+                  },
+                  "requests": {
+                    "cpu": "200m",
+                    "memory": "200Mi"
+                  }
+                },
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 55,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "failureThreshold": 2
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "failureThreshold": 1
+                },
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "volumes": [
+              {
+                "name": "node-proxy",
+                "configMap": {
+                  "name": "node-proxy"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nagios",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "strategy": {
+          "type": "Recreate",
+          "recreateParams": {
+            "timeoutSeconds": 600
+          },
+          "resources": {}
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": 1,
+        "test": false,
+        "selector": {
+          "name": "nagios"
+        },
+        "template": {
+          "metadata": {
+            "creationTimestamp": null,
+            "labels": {
+              "name": "nagios"
+            }
+          },
+          "spec": {
+            "volumes": [
+              {
+                "name": "nagios-data-volume",
+                "persistentVolumeClaim": {
+                  "claimName": "nagios-claim-1"
+                }
+              }
+            ],
+            "containers": [
+              {
+                "name": "nagios",
+                "image": "${NAGIOS_IMAGE}:${NAGIOS_IMAGE_VERSION}",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "protocol": "TCP"
+                  }
+                ],
+                "volumeMounts": [
+                  {
+                    "name": "nagios-data-volume",
+                    "mountPath": "/var/log/nagios"
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "SMTP_SERVER",
+                    "value": "${SMTP_SERVER}"
+                  },
+                  {
+                    "name": "SMTP_USERNAME",
+                    "value": "${SMTP_USERNAME}"
+                  },
+                  {
+                    "name": "SMTP_PASSWORD",
+                    "value": "${SMTP_PASSWORD}"
+                  },
+                  {
+                    "name": "SMTP_TLS",
+                    "value": "${SMTP_TLS}"
+                  },
+                  {
+                    "name": "SMTP_FROM_ADDRESS",
+                    "value": "${SMTP_FROM_ADDRESS}"
+                  },
+                  {
+                    "name": "RHMAP_ADMIN_EMAIL",
+                    "value": "${RHMAP_ADMIN_EMAIL}"
+                  },
+                  {
+                    "name": "NAGIOS_USER",
+                    "value": "${NAGIOS_USER}"
+                  },
+                  {
+                    "name": "NAGIOS_PASSWORD",
+                    "value": "${NAGIOS_PASSWORD}"
+                  },
+                  {
+                    "name": "RHMAP_ROUTER_DNS",
+                    "value": "${RHMAP_ROUTER_DNS}"
+                  },
+                  {
+                    "name": "RHMAP_HOSTGROUPS",
+                    "value": "${RHMAP_HOSTGROUPS}"
+                  },
+                  {
+                    "name": "MONGODB_ENDPOINT_COUNT",
+                    "value": "${MONGODB_ENDPOINT_COUNT}"
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "800m",
+                    "memory": "800Mi"
+                  },
+                  "requests": {
+                    "cpu": "200m",
+                    "memory": "200Mi"
+                  }
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "readinessProbe": {
+                  "failureThreshold": 3,
+                  "initialDelaySeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "tcpSocket": {
+                    "port": 8080
+                  },
+                  "timeoutSeconds": 5
+                },
+                "livenessProbe": {
+                  "failureThreshold": 3,
+                  "initialDelaySeconds": 60,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "tcpSocket": {
+                    "port": 8080
+                  },
+                  "timeoutSeconds": 5
+                },
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30,
+            "dnsPolicy": "ClusterFirst",
+            "serviceAccountName": "nagios",
+            "serviceAccount": "nagios",
+            "securityContext": {}
+          }
+        }
+      },
+      "status": {}
+    },
+    {
+      "kind": "Route",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "mbaas",
+        "annotations": {
+          "openshift.io/host.generated": "false"
+        }
+      },
+      "spec": {
+        "host": "${MBAAS_ROUTER_DNS}",
+        "to": {
+          "kind": "Service",
+          "name": "fh-mbaas-service"
+        },
+        "tls": {
+          "termination": "edge",
+          "insecureEdgeTerminationPolicy": "Allow"
+        }
+      }
+    },
+    {
+      "kind": "Route",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nagios",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "host": "",
+        "to": {
+          "kind": "Service",
+          "name": "nagios"
+        },
+        "tls": {
+          "termination": "edge",
+          "insecureEdgeTerminationPolicy": "Allow"
+        }
+      },
+      "status": {
+        "ingress": null
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "FH_CLUSTER",
+      "value": "development",
+      "description": "the name of the cluster the mbaas was created from"
+    },
+    {
+      "name": "FHMBAAS_KEY",
+      "description": "The MBaaS key",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}"
+    },
+    {
+      "name": "FH_MBAASID",
+      "value": "default",
+      "description": "id of the mbaas. A value chosen by the user"
+    },
+    {
+      "name": "FH_MBAAS_IMAGE",
+      "value": "rhmap45/fh-mbaas",
+      "description": "The name of the fh-mbaas image"
+    },
+    {
+      "name": "FH_MBAAS_IMAGE_VERSION",
+      "value": "5.8.1-5",
+      "description": "The version for the FH_MBAAS_IMAGE"
+    },
+    {
+      "name": "FH_MESSAGING_IMAGE",
+      "value": "rhmap45/fh-messaging",
+      "description": "The name of the fh-messaging image"
+    },
+    {
+      "name": "FH_MESSAGING_IMAGE_VERSION",
+      "value": "3.0.9-5",
+      "description": "The version for the FH_MESSAGING_IMAGE"
+    },
+    {
+      "name": "FH_METRICS_IMAGE",
+      "value": "rhmap45/fh-metrics",
+      "description": "The name of the fh-metrics image"
+    },
+    {
+      "name": "FH_METRICS_IMAGE_VERSION",
+      "value": "3.0.7-6",
+      "description": "The version for the FH_METRICS_IMAGE"
+    },
+    {
+      "name": "FH_STATSD_IMAGE",
+      "value": "rhmap45/fh-statsd",
+      "description": "The name of the fh-statsd image"
+    },
+    {
+      "name": "FH_STATSD_IMAGE_VERSION",
+      "value": "2.0.4-17",
+      "description": "The version for the FH_STATSD_IMAGE"
+    },
+    {
+      "name": "FH_MESSAGING_API_KEY",
+      "description": "Key for communicating with the FH_MESSAGING Service",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}"
+    },
+    {
+      "name": "FH_METRICS_API_KEY",
+      "description": "Key for communicating with the FH_METRICS Service",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}"
+    },
+    {
+      "name": "MBAAS_ROUTER_DNS",
+      "description": "The DNS name for the MBaaS Router",
+      "value": ""
+    },
+    {
+      "name": "MONGODB_ENDPOINT_COUNT",
+      "description": "The number of databases to create in a replica set",
+      "value": "1"
+    },
+    {
+      "name": "FH_MBAAS_REPLICAS",
+      "description": "Number of fh-mbaas replicas to create",
+      "value": "1"
+    },
+    {
+      "name": "FH_MESSAGING_REPLICAS",
+      "description": "Number of fh-messaging replicas to create",
+      "value": "1"
+    },
+    {
+      "name": "FH_METRICS_REPLICAS",
+      "description": "Number of fh-metrics replicas to create",
+      "value": "1"
+    },
+    {
+      "name": "FH_STATSD_API_KEY",
+      "description": "Key for communicating with the FH_STATSD Service",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}"
+    },
+    {
+      "name": "FH_DEFAULT_LOG_LEVEL",
+      "description": "A default log level for all MBaaS components",
+      "value": "info"
+    },
+    {
+      "name": "SMTP_SERVER",
+      "description": "SMTP server address to use for sending alert emails e.g. 1.2.3.4:25",
+      "value": "localhost"
+    },
+    {
+      "name": "SMTP_USERNAME",
+      "description": "SMTP username",
+      "value": "username"
+    },
+    {
+      "name": "SMTP_PASSWORD",
+      "description": "SMTP password",
+      "value": "password"
+    },
+    {
+      "name": "SMTP_TLS",
+      "description": "Use TLS for message delivery (auto|yes|no)",
+      "value": "auto"
+    },
+    {
+      "name": "SMTP_FROM_ADDRESS",
+      "description": "From email address for alerts",
+      "value": "admin@example.com"
+    },
+    {
+      "name": "RHMAP_ADMIN_EMAIL",
+      "description": "To email address for alerts",
+      "value": "root@localhost"
+    },
+    {
+      "name": "NAGIOS_USER",
+      "description": "Nagios admin username",
+      "value": "nagiosadmin"
+    },
+    {
+      "name": "NAGIOS_PASSWORD",
+      "description": "Nagios admin user password",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{10}"
+    },
+    {
+      "name": "RHMAP_ROUTER_DNS",
+      "description": "Host or Service name for RHMAP",
+      "value": "localhost"
+    },
+    {
+      "name": "RHMAP_HOSTGROUPS",
+      "description": "RHMAP hostgroups being monitored (core|mbaas|core,mbaas)",
+      "value": "mbaas"
+    },
+    {
+      "name": "NAGIOS_IMAGE",
+      "description": "The name of the Nagios Docker image",
+      "value": "rhmap45/nagios"
+    },
+    {
+      "name": "NAGIOS_IMAGE_VERSION",
+      "description": "The version of the Nagios Docker image",
+      "value": "4.0.8-53"
+    }
+  ]
+}

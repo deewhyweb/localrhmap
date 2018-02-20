@@ -1,0 +1,26 @@
+---
+
+-
+  name: "Replace mongo deployment config"
+  shell: oc replace -f /tmp/{{ item }}.json
+
+-
+  name: "Verify deployment finished"
+  action: shell  oc get pods --namespace {{ project_name }}  |  grep  "deploy"
+  register: result
+  until: not result.stdout
+  retries: "{{ retry_limit }}"
+  delay: "{{ interval }}"
+  failed_when: result.stdout
+
+- 
+  name: "Wait for mongo pod to be running"
+  action: shell oc get pods --namespace {{ project_name }}  | grep "^{{ item }}-[0-9]*-[.]*"
+  register: result
+  until: "'Running' in result.stdout"
+  retries: "{{ retry_limit }}"
+  delay: "{{ interval }}"
+
+-
+  name: "Update replica set configuration"
+  command: bash -c "oc --namespace {{ project_name }} rsh {{ rsh_pod }} \"/bin/bash\" \"-c\" \"mongo admin -u admin -p {{admin_password.stdout}} --quiet --eval '(rs.reconfig(rs.config()))'\""

@@ -1,0 +1,34 @@
+---
+
+- name: Force status check to schedule in Nagios container
+  shell: "oc exec --namespace {{ project_name }} $(oc get po --namespace {{ project_name }}  | grep nagios | awk '{print $1}') -c nagios -- python /opt/rhmap/host-svc-check"
+  register: nagios_result
+  failed_when: False
+  tags:
+    - nagios
+
+- name: Execute status check in Nagios container
+  shell: "oc exec  --namespace {{ project_name }}  $(oc get po --namespace {{ project_name }}  | grep nagios | awk '{print $1}') -c nagios -- python /opt/rhmap/check-status | \
+          sed -e 's/16/critical/' -e 's/1/pending/' -e 's/2/healthy/' -e 's/4/warning/' -e 's/8/unknown/' "
+  register: nagios_result
+  failed_when: False
+  tags:
+    - nagios
+
+-
+  name: "Verify Nagios dashboard is green, fail otherwise"
+  shell: echo {{ item }}
+  register: nagios_dashboard
+  with_items: "{{ nagios_result.stdout_lines }}"
+  when:
+    - (mongo_replicas is defined and mongo_replicas == 3) or (role is defined and role == "core") or (role is defined and role == "dedicated")
+  failed_when:
+    - "'critical' in nagios_dashboard.stdout or 'warning' in nagios_dashboard.stdout or 'unknown' in nagios_dashboard.stdout "
+  changed_when: False
+  tags:
+    - nagios
+
+- debug: var=nagios_dashboard.stdout_lines
+  when: nagios_dashboard|failed
+  tags:
+    -nagios

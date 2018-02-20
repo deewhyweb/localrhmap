@@ -1,0 +1,264 @@
+---
+
+-
+  name: "Set default template directory"
+  set_fact: core_templates_dir="/opt/rhmap/{{ rhmap_version }}/templates/core"
+  when: core_templates_dir is not defined
+
+- include: templates_checks.yml
+
+- include: pv_checks.yml
+  when:
+    - target is undefined or target == 'enterprise'
+    - ansible_connection != 'local'
+
+-
+  name: "Create the RHMAP Core project in OpenShift"
+  command: "oc new-project {{ project_name }}"
+  register: output
+  failed_when: output.stderr != '' and 'already exists' not in output.stderr
+  changed_when: output.rc == 0
+
+-
+  name: "Check if nodes are labeled as type=core"
+  shell: "oc describe nodes --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }} | grep type=core"
+  register: check_nodes
+  become: true
+  when:
+    - target == 'enterprise'
+    - ansible_connection != 'local'
+  failed_when: "'FAILED' in output.stderr"
+  changed_when: False
+
+-
+  name: "Specify node-selector for the project when nodes are labeled as type=core"
+  shell: "oc annotate namespace {{ project_name }} openshift.io/node-selector=type=core --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }}"
+  become: true
+  when:
+    - not check_nodes|skipped
+    - check_nodes.rc == 0
+  register: result
+  failed_when: False
+  changed_when: result.rc == 0
+
+
+-
+  name: "Check if gitlab secret exists"
+  command: "oc get secret gitlab-ssh --namespace {{ project_name }} "
+  register: gitlab_secret_result
+  failed_when: False
+  changed_when: False
+
+-
+  block:
+
+    -
+      name: "Create tmp directory for gitlab_ssh keys"
+      file: path=/tmp/gitlab_shell state=directory mode=0755
+
+    -
+      name: "Generate repoadmin SSH keys for internal Git communication"
+      command: ssh-keygen -q -N '' -C "repoadmin_id_rsa" -f "repoadmin_id_rsa"
+      args:
+        chdir: /tmp/gitlab_shell
+        creates: repoadmin_id_rsa
+
+    -
+      name: "Generate repoadmin SSH keys for internal Git communication"
+      command: ssh-keygen -q -N '' -C "gitlab_shell_id_rsa" -f "gitlab_shell_id_rsa"
+      args:
+        chdir: /tmp/gitlab_shell
+        creates: gitlab_shell_id_rsa
+
+    -
+      name: "Set permissions on SSH keys"
+      shell: find /tmp/gitlab_shell/  -type f -exec chmod 0777 {} \;
+
+    -
+      name: "Create a Secret to store these SSH keys"
+      command: "oc secrets new gitlab-ssh repoadmin-id-rsa=/tmp/gitlab_shell/repoadmin_id_rsa \
+                             repoadmin-id-rsa-pub=/tmp/gitlab_shell/repoadmin_id_rsa.pub \
+                             gitlab-shell-id-rsa=/tmp/gitlab_shell/gitlab_shell_id_rsa \
+                             gitlab-shell-id-rsa-pub=/tmp/gitlab_shell/gitlab_shell_id_rsa.pub --namespace {{ project_name }} "
+      register: output
+      failed_when: output.stderr != '' and 'already exists' not in output.stderr
+
+    -
+      name: Clean artifact path
+      file:
+        state: absent
+        path: "/tmp/gitlab_shell/"
+
+
+  when: gitlab_secret_result.rc != 0
+
+-
+  name: Check that the anyuid-scc exists
+  stat:
+    path: "{{ core_templates_dir }}/scc-anyuid-with-chroot.json"
+  register: file_result
+
+-
+  block:
+
+    -
+      name: "Create a SecurityContextConstraint with the anyuid SCC that allows chroot inside Core containers"
+      command: "oc create -f {{ core_templates_dir }}/scc-anyuid-with-chroot.json --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }}  --namespace {{ project_name }} "
+      become: true
+      register: result
+      failed_when: result.stderr != '' and 'already exists' not in result.stderr
+      changed_when: result.rc == 0
+
+    -
+      name: "Add the new SecurityContextConstraint to the default ServiceAccount for the project"
+      command: "oc adm --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }} policy add-scc-to-user anyuid-with-chroot system:serviceaccount:{{ project_name }}:default"
+      become: true
+
+  when: file_result.stat.exists == True
+
+-
+  name: "Read list of service accounts for this namepsace"
+  command: oc get policyBindings :default -n {{ project_name }} --template {% raw %}"{{(index .roleBindings 0).roleBinding.subjects}}"{% endraw %}
+  register: sa_list
+  failed_when: False
+  changed_when: False
+  tags:
+    - monitoring
+
+-
+  name: "Add edit role to user for the Core project"
+  command: "oc policy add-role-to-user admin {{ oc_user }} -n {{ project_name }}"
+  register: add_policy
+  changed_when: oc_user not in sa_list.stdout and add_policy.rc == 0
+
+
+-
+  name: "Create Nagios serviceaccount"
+  command: "oc create serviceaccount nagios --namespace {{ project_name }}"
+  register: nagios_sa_result
+  failed_when:
+    - nagios_sa_result.stderr != '' and 'already exists' not in nagios_sa_result.stderr
+    - "'created' not in nagios_sa_result.stdout"
+  changed_when: nagios_sa_result.rc == 0
+  tags:
+    - monitoring
+
+
+-
+  name: "Apply admin role to Nagios user"
+  command: "oc policy add-role-to-user admin -z nagios  --namespace {{ project_name }} "
+  register: nagios_role_result
+  changed_when: "'nagios' not in sa_list.stdout and nagios_role_result.rc == 0"
+  tags:
+    - monitoring
+
+-
+  name: "Create the Core monitoring resources"
+  command: "oc new-app -f {{ core_templates_dir }}/fh-core-monitoring.json \
+                          -p SMTP_SERVER={{ monitoring.smtp_server }} \
+                          -p SMTP_USERNAME={{ monitoring.smtp_username }}  \
+                          -p SMTP_PASSWORD={{ monitoring.smtp_password }} \
+                          -p SMTP_FROM_ADDRESS={{ monitoring.smtp_from_address }} \
+                          -p RHMAP_ADMIN_EMAIL={{ monitoring.rhmap_admin_email }} \
+                          -p RHMAP_HOSTGROUPS='core' --namespace {{ project_name }}"
+  register: monitoring_result
+  failed_when:
+    - monitoring_result.stderr and monitoring_result.stderr != '' and 'already exists' not in monitoring_result.stderr
+  changed_when: monitoring_result.rc == 0 or (monitoring_result.rc == 1 and 'created' in monitoring_result.stdout)
+  tags:
+    - monitoring
+
+-
+  name: "Create the Core infrastructure resources"
+  command: "oc new-app -f {{ core_templates_dir }}/fh-core-infra.json --namespace {{ project_name }} "
+  register: infra_result
+  failed_when:
+    - infra_result.stderr and infra_result.stderr != '' and 'already exists' not in infra_result.stderr
+  changed_when: infra_result.rc == 0 or (infra_result.rc == 1 and 'created' in infra_result.stdout)
+  tags:
+    - infrastructure
+
+-
+  include: poller.yml pause_for={{ infrastructure.pause_for | default('20') }}
+  when: infra_result|changed or monitoring_result|changed
+
+-
+  name: "Create the Core backend resources"
+  command: "oc new-app -f {{ core_templates_dir }}/fh-core-backend.json \
+                        -p PROXY_URL='{{proxy_url | default('') }}' \
+                        -p PROXY_HOST='{{proxy_host | default('') }}' \
+                        -p PROXY_PORT='{{proxy_port | default('') }}' \
+                        -p PROXY_USER='{{proxy_user | default('') }}' \
+                        -p PROXY_PASS='{{proxy_pass | default('') }}' --namespace {{ project_name }} "
+  register: backend_result
+  failed_when:
+    - backend_result.stderr and backend_result.stderr != '' and 'already exists' not in backend_result.stderr
+  changed_when: backend_result.rc == 0 or (backend_result.rc == 1 and 'created' in backend_result.stdout)
+  tags:
+    - backend
+
+-
+  include: poller.yml pause_for={{ backend.pause_for | default('30') }}
+  when: backend_result|changed
+  tags:
+    - backend
+
+-
+  name: "Get exposed route"
+  command: oc get route git --template={% raw %}"{{.spec.host}}"{% endraw %} --namespace {{ project_name }}
+  register: git_external_host
+  changed_when: False
+  tags:
+    - frontend
+
+-
+  debug: msg="Git external host parsed to {{ git_external_host.stdout }}"
+  tags:
+    - frontend
+
+-
+  name: "Get router subdomain"
+  shell: echo {{ git_external_host.stdout }} | cut -d "." -f 2-
+  register: router_subdomain
+  changed_when: False
+  tags:
+    - frontend
+
+-
+  debug: msg="Git router subdomain parsed to {{ router_subdomain.stdout }}"
+  tags:
+    - frontend
+
+-
+  name: 'Create the Core frontend resources'
+  command: "oc new-app -f {{ core_templates_dir }}/fh-core-frontend.json \
+  -p CLUSTER_DOMAIN={{ router_subdomain.stdout }} \
+  -p GIT_EXTERNAL_HOST={{ git_external_host.stdout }} \
+  -p GIT_EXTERNAL_PROTOCOL={{ git_external_protocol | default(frontend.git_external_protocol) }} \
+  -p SMTP_SERVER='{{ frontend.smtp_server }}' \
+  -p SMTP_USERNAME='{{ frontend.smtp_username }}' \
+  -p SMTP_PASSWORD='{{ frontend.smtp_password }}' \
+  -p EMAIL_REPLYTO='{{ frontend.email_replyto }}' \
+  -p SMTP_PORT='{{ frontend.smtp_port }}' \
+  -p SMTP_AUTH='{{ frontend.smtp_auth }}' \
+  -p SMTP_TLS='{{ frontend.smtp_tls }}' \
+  -p FH_DOMAIN_NAME='{{ domain_name | default('rhmap') }}'
+  -p BUILDER_ANDROID_SERVICE_HOST='{{ frontend.builder_android_service_host }}' \
+  -p BUILDER_IPHONE_SERVICE_HOST='{{ frontend.builder_iphone_service_host }}' --namespace {{ project_name }} "
+  register: frontend_result
+  failed_when:
+    - frontend_result.stderr and frontend_result.stderr != '' and 'already exists' not in frontend_result.stderr
+  changed_when: frontend_result.rc == 0 or (frontend_result.rc == 1 and 'created' in frontend_result.stdout)
+  tags:
+    - frontend
+
+-
+  include: poller.yml pause_for={{ frontend.pause_for | default('30') }}
+  when: frontend_result|changed
+  tags:
+    - frontend
+
+-
+  include: nagios.yml
+  tags:
+    - nagios

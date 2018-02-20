@@ -1,0 +1,32 @@
+---
+
+min_required_vCPUS: 4
+ansible_processor_vcpus: 5
+required_mem_mb_threshold: 7000
+warning_kb_value: 4000000
+required_100_pv: 0
+required_65_pv: 0
+required_50_pv: 0
+required_32_pv: 0
+required_25_pv: 2
+required_10_pv: 2
+required_5_pv: 1
+required_1_pv: 1
+role: "core"
+strict_mode: false
+pause_for: 60
+retry_limit: 20
+interval: 30
+
+# Do not modify
+rhmap_version: "4.5"
+#
+# # used for upgrades
+components: ["gitlab-shell","memcached","mongodb-1","mysql","redis","ups","nagios","fh-aaa","fh-appstore","fh-messaging","fh-metrics","fh-ngui","fh-scm","fh-supercore","millicore"]
+#
+infrastructure:
+  pause_for: 20
+#
+backend:
+  pause_for: 20
+#

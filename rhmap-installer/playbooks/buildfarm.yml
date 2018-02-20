@@ -1,0 +1,177 @@
+---
+
+- name: "Verify selinux rpm"
+  hosts: master:core:mbaas
+  remote_user: root
+  tasks:
+
+    -
+      block:
+
+        -
+          name: "Getting current version of container-selinux rpm"
+          yum:
+            list: container-selinux
+          environment:
+            http_proxy: "{{ proxy_url | default('') }}"
+            https_proxy: "{{ proxy_url | default('') }}"
+          register: selinux_result
+          become: True
+
+        - name: "Fail if minimum version of rpm to support gluster is not installed"
+          fail:
+            msg: "Current container-selinux version is {{ item }}"
+          with_items: "{{ selinux_result.results | default([]) | selectattr('yumstate', 'match', '^installed$') | map(attribute='version') | list }}"
+          register: outdated_versions
+          when:
+            - item | float < 2.12
+
+      rescue:
+
+        -
+          name: "!! Warning !! Requirement not met!"
+          pause:
+            prompt: "GlusterFS storage requires version 2.12-2.gite7096ce.el7 and above of the container-selinux rpm.
+                     Press enter to update this dependency or press ctrl + c to cancel the installation"
+
+        -
+          name: "Update version of container-selinux rpm"
+          yum:
+            name: container-selinux
+            state: latest
+            update_cache: yes
+            enablerepo: rhel-7-server-extras-rpms
+          environment:
+            http_proxy: "{{ proxy_url | default('') }}"
+            https_proxy: "{{ proxy_url | default('') }}"
+          register: selinux_result
+          become: True
+          when: hostvars["{{ inventory_hostname }}"].outdated_versions is defined
+
+      when:
+        - gluster_storage is defined
+        - gluster_storage | bool
+        - ansible_os_family == 'RedHat'
+
+
+- name: "Run initial minimum requirement checks"
+  hosts: master
+  remote_user: root
+  roles:
+    - {role: login, updating: false}
+  tags: preflight-checks
+  vars_files:
+    - "../roles/preflight_checks/vars/buildfarm.yml"
+  tasks:
+
+    -
+      name: "Check the provided project name exists"
+      command: oc get project {{ core_project_name }}
+      register: check_project
+      when:
+        - core_project_name is defined
+        - core_project_name != ''
+      failed_when: check_project.rc != 0
+
+    -
+      name: "Check Persistent Volumes"
+      include: tasks/pv_checks.yml
+
+    -
+      name: "Check Java is installed on path of local machine"
+      command: which java
+      register: java_status
+      failed_when: False
+
+    -
+      name: "Install Java"
+      include_role:
+        name: digger-installer/java
+      when: java_status.rc != 0
+
+- name: "Deploy Digger"
+  hosts: master
+  remote_user: root
+  roles:
+    - {role: proxy-setup}
+    - {role: gluster-fs, when: gluster_storage is defined and gluster_storage, project_name: "{{ buildfarm_project_name | default('buildfarm') }}", tags: ["deploy", "gluster-fs"]}
+    - {role: digger-installer/android-sdk, project_name: "{{ buildfarm_project_name | default('buildfarm') }}", tags: ["deploy", "android-sdk"]}
+    - {role: digger-installer/deploy-jenkins, project_name: "{{ buildfarm_project_name | default('buildfarm') }}", tags: ["deploy", "deploy-jenkins"] }
+    - {role: digger-installer/configure-buildfarm, project_name: "{{ buildfarm_project_name | default('buildfarm') }}", tags: ["deploy", "configure-buildfarm"]}
+  vars_files:
+    - "../roles/preflight_checks/vars/buildfarm.yml"
+  tasks:
+    -
+      name: "Get jenkins url"
+      shell: "oc get route jenkins --namespace={{ buildfarm_project_name | default('buildfarm') }} -o jsonpath='{.spec.host}'"
+      register: route_output
+      tags: configure-millicore
+
+    -
+      name: "Add required env variables"
+      shell: "oc env --namespace={{ core_project_name }} dc/millicore -c millicore \
+                      BUILDFARM_VERSION={{ buildfarm_version | default('2.0') }} \
+                      BUILDFARM_HOST={{ jenkins_route_protocol | default('https') }}://{{ route_output.stdout }} \
+                      BUILDFARM_USERNAME={{ jenkins_username | default('admin') }} \
+                      BUILDFARM_PASSWORD={{ jenkins_password  | default('password') }} \
+                      BUILDFARM_PLATFORMS={{ digger_platforms if digger_platforms is defined and digger_platforms != '' else 'android,ios' if groups['macos'] is defined and groups['macos'] | length > 0 else 'android' }} \
+                      BUILDFARM_BUILD_TIMEOUT={{ buildfarm_build_timeout | default('3600') }} \
+                      BUILDFARM_BUILD_POLLING_INTERVAL={{ buildfarm_build_polling_interval | default('10') }} \
+                      BUILDFARM_CSRF_ENABLED={{ buildfarm_csrf_enabled | default('false') }} \
+                      BUILDFARM_BUILDS_DAYS={{ buildfarm_builds_days  | default('30') }} \
+                      BUILDFARM_BUILDS_TOTAL={{ buidfarm_builds_total | default('') }} \
+                      BUILDFARM_ARTIFACTS_DAYS={{ buildfarm_artifacts_days | default('30') }} \
+                      BUILDFARM_ARTIFACTS_TOTAL={{ buildfarm_artifacts_total | default('') }}"
+      register: env_output
+      tags: configure-millicore
+      when: core_project_name is defined
+
+    - debug: var=env_output
+      tags: configure-millicore
+
+    - name: "Poll for millicore to become ready"
+      include: tasks/poller.yml project_name={{ core_project_name }}
+      tags: configure-millicore
+      when: core_project_name is defined and env_output|changed
+
+    -
+      debug:
+        msg: 'Your RHMAP installation is now configured to use the new BuildFarm'
+      tags: configure-millicore
+      when: core_project_name is defined and env_output|changed
+
+    -
+      debug:
+        msg: 'The variable core_project_name was not supplied, skipping the configuration, please re-run the playbook and add -e "core_project_name=<core-project-name>" to configure your core to use the new buildfarm'
+      tags: configure-millicore
+      when: core_project_name is not defined
+  tags:
+    - deploy
+
+-
+  name: "Provision macOS node"
+  hosts: macos
+  remote_user: "{{ macos_user | default('jenkins') }}"
+  roles:
+    - {role: digger-installer/java, project_name: "{{ buildfarm_project_name | default('buildfarm') }}", tags: provision-osx}
+    - {role: digger-installer/provision-osx, project_name: "{{ buildfarm_project_name | default('buildfarm') }}", tags: provision-osx}
+  vars_files:
+    - "../roles/preflight_checks/vars/buildfarm.yml"
+
+-
+  name: "Install Nagios"
+  hosts: master
+  remote_user: root
+  roles:
+    - {role: digger-installer/deploy-nagios, project_name: "{{ buildfarm_project_name | default('buildfarm') }}", tags: ["deploy", "deploy-nagios"]}
+  vars_files:
+    - "../roles/preflight_checks/vars/buildfarm.yml"
+
+-
+  name: "Print info"
+  hosts: master
+  remote_user: root
+  roles:
+    - {role: digger-installer/print-info, project_name: "{{ buildfarm_project_name | default('buildfarm') }}", tags: print-info}
+  vars_files:
+    - "../roles/preflight_checks/vars/buildfarm.yml"

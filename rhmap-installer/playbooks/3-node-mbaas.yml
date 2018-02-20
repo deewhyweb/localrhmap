@@ -1,0 +1,41 @@
+---
+
+# Playbook which installs a three node persistent RHMAP MBaaS
+
+- name: "Check labelling of MBaaS nodes"
+  hosts: master
+  remote_user: root
+  roles:
+    - {role: check-mbaas-labels, tags: label}
+  vars_files:
+    - "../roles/preflight_checks/vars/3-node-mbaas.yml"
+
+- name: "Prepare infrastructure for installation"
+  hosts: mbaas
+  remote_user: root
+  roles:
+    - {role: preflight_checks, tags: preflight_checks}
+  vars_files:
+    - "../roles/preflight_checks/vars/3-node-mbaas.yml"
+
+- name: "Check for and update to nodejs 6 for image-streams"
+  hosts: master
+  roles:
+    - {role: image-streams, tags: preflight_checks}
+  vars_files:
+    - "../roles/preflight_checks/vars/core.yml"
+
+- name: "Enable Docker to access container images of RHMAP components"
+  hosts: master,mbaas
+  remote_user: root
+  roles:
+    - {role: rhmap-rpm, tags: rpm}
+
+
+- name: "Install 3 node RHMAP MBaaS"
+  hosts: master
+  remote_user: root
+  roles:
+    - { role: deploy-mbaas, tags: deploy}
+  vars_files:
+    - "../roles/preflight_checks/vars/3-node-mbaas.yml"

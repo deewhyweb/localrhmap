@@ -1,0 +1,14 @@
+---
+
+project_name: "rhmap-{{ mongo_replicas }}-node-mbaas"
+
+monitoring:
+  smtp_server: ""
+  smtp_username: ""
+  smtp_password: ""
+  smtp_from_address: ""
+  rhmap_admin_email: ""
+
+
+#Required only for poc.yml Playbook
+mbaas_target_id: "poc-mbaas"

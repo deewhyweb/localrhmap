@@ -1,0 +1,68 @@
+[Nodes:children]
+master
+macos
+
+[Nodes:vars]
+# OpenShift URL, if you are using ansible_connection=local then you must specify a master_url, or else it will default to localhost:8443.
+master_url=
+# OpenShift Credentials
+oc_user=
+oc_password=
+
+# provide proxy info if required
+proxy_host=
+proxy_port=
+proxy_user=
+proxy_pass=
+proxy_protocol=http
+
+# Optional variables. Uncomment those to provide overrides.
+
+# Specify the project name. Default value is `digger`
+# project_name=
+
+# The protocol of the Jenkins server. Default value is `https`
+# jenkins_route_protocol=
+
+# The maximum number of concurrent builds for Android. Default is `5`
+# concurrent_android_builds=
+
+# The user and password of the jenkins installation
+# uncomment if you want to override the default admin user credentials
+# jenkins_user=admin
+# jenkins_pass=password
+
+# Maximum amount of memory the Jenkins master container can use. Defaults to `3Gi`
+# master_memory_limit=
+
+# Volume space available for data, e.g. 512Mi, 2Gi. Defaults to `40Gi`
+# master_volume_capacity=
+
+[master]
+# Required. The ip address of the master node of the OpenShift cluster
+
+[macos]
+# The ip address(es) of the mac server(s). Only required to build iOS apps.
+
+[macos:vars]
+# Add the following if a password is required for privilege escalation on the SSH user
+ansible_become_pass=secret
+
+# The following variables are only required to build iOS apps.
+# You can comment them out if you don't need to build iOS apps.
+
+
+# Apple Developer Account username and password.
+# If they are not set Xcode installation will be skipped.
+xcode_install_user=
+xcode_install_password=
+
+# Path to the private key that Jenkins should use to SSH into the macOS node.
+# If this isn’t set the Jenkins node configuration will be skipped.
+credential_private_key_path=
+# Passphrase for the private key.
+# If this isn’t set the Jenkins node configuration will be skipped.
+credential_passphrase=
+# Path to the public key. The macOS node will add this to it’s authorized_keys file.
+# If this isn’t set the Jenkins node configuration will be skipped.
+credential_public_key_path=

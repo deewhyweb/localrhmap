@@ -1,0 +1,51 @@
+---
+
+
+-
+  debug:
+    msg: "Deployment failure. Some Pods failed to start Ansible will attempt to cleanup failed pods"
+
+-
+  name: "Pausing for Pods to report Error status"
+  pause: seconds=10
+
+-
+  name: "Getting list of failed Pods"
+  shell: oc get pods --namespace {{ project_name }}  | grep "Error" | awk '{print $1}'
+  register: failed_pods
+  failed_when: False
+
+-
+  name: "Delete Pods in Error status"
+  shell: oc delete pod {{ item }} --namespace {{ project_name }}
+  register: output
+  when: failed_pods and failed_pods.stdout_lines
+  with_items: "{{ failed_pods.stdout_lines }}"
+
+
+-
+  name: "Get list of failed deployments"
+  shell: oc get dc --namespace {{ project_name }} | awk 'NR>1 && ($3 != $4) {print $1}'
+  register: dcs
+  failed_when: False
+
+
+-
+  name: "Redeploy Pods"
+  shell: oc deploy --latest {{ item }} --namespace {{ project_name }}
+  when: dcs.stdout_lines is defined
+  with_items: "{{ dcs.stdout_lines  | default([]) }}"
+
+-
+  name: "Get event log"
+  shell: oc get events --namespace {{ project_name }}
+  register: events
+
+-
+  name: "Dumping events log to file for debugging purposes"
+  local_action: copy content="{{ events }}" dest=/tmp/events_error.log
+
+-
+  name: "Aborting playbook"
+  fail:
+    msg: "Aborted playbook and completed clean up. The playbook has attempted to redeploy any failed pods. You can use the 'oc get ev -w' command to get a more detailed view of the event log. Please run the playbook again later."

@@ -1,0 +1,35 @@
+---
+
+-
+  name: "Create the {{ mongo_replicas }} Node MBaaS"
+  command: "oc new-app -f {{ mbaas_templates_dir }}/{{ file }}.json \
+            -p MONGO_INSTANCE={{ replica_number | default('1') }} \
+            --namespace {{ project_name }}"
+  register: mongo_output
+  failed_when: mongo_output.stderr != '' and 'already exists' not in mongo_output.stderr
+  changed_when: config_output.rc == 0
+
+-
+  include: poller.yml pause_for=0
+  when: mongo_output|changed
+
+-
+  name: "Get list of Mongo Pods"
+  register: mongo_pods
+  changed_when: False
+  shell: "oc get pods --namespace {{ project_name }} | grep -v deploy | grep mongodb-{{ replica_number | default('1') }} | awk '{print $1}'"
+  when: mongo_output|changed
+
+-
+  set_fact:
+    listen_for: "{{ 'waiting for connections on port' if mongo_replicas == 1 else 'waiting for connections on port' if replica_number == 1 else 'waiting for connections on port' }}"
+
+-
+  name: "Verify Mongo is listening"
+  command: oc logs {{ item }} --namespace {{ project_name }}
+  register: mongo_logs
+  until: mongo_logs.stdout.find("{{ listen_for }}") != -1
+  with_items: "{{ mongo_pods.stdout_lines  | default([]) }}"
+  changed_when: False
+  when:
+    - mongo_output|changed

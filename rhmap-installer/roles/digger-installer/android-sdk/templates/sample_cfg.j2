@@ -1,0 +1,19 @@
+{% for comp in components|dictsort %}
+
+[{{ comp[0] }}]
+{% for compName in comp[1] %}
+{{ compName }}
+{% endfor %}
+{% endfor %}
+
+{# NOTE: the order of those entries are important, do not change the orders #}
+[keystore]
+alias=AndroidDebugKey
+name={{ keystore.name | default('AG') }}
+unit={{ keystore.unit | default('AeroGear') }} 
+org={{ keystore.org | default('RedHat') }}
+loc={{ keystore.loc | default('Waterford') }}
+state={{ keystore.state | default('WD') }}
+country={{ keystore.country | default('IRL') }}
+storepass=android
+keypass=android

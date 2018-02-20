@@ -1,0 +1,38 @@
+---
+-
+  name: "Set default template directory"
+  set_fact: core_templates_dir="/opt/rhmap/{{ rhmap_version }}/templates/core"
+  when: core_templates_dir is not defined
+
+-
+  include: templates_checks.yml
+
+-
+  name: "Set EXTERNAL_HOST variable in RHMAP Core"
+  command: "oc env dc millicore -n {{ rhmap_core_project_name }} EXTERNAL_HOST={{ non_wildcard_external_host }}"
+  register: output
+  when: rhmap_core_project_name is defined and rhmap_core_project_name != ''
+
+-
+  name: "Create the Non Wildcard Proxy project in OpenShift"
+  command: "oc new-project {{ project_name }}"
+  register: output
+  failed_when: output.stderr != '' and 'already exists' not in output.stderr
+  changed_when: output.rc == 0
+
+-
+  name: "Target the proxy project if it already exists"
+  command: "oc project {{ project_name }}"
+  register: result
+  when: output.stderr != '' and 'already exists' in output.stderr
+  changed_when: "'Already on project' not in result.stdout"
+
+-
+  name: "Setup Non Wildcard Proxy"
+  command: "oc new-app -f {{ core_templates_dir }}/fh-nginx-proxy-template.json \
+            -p BASE_HOST={{ base_host }} \
+            -p PLATFORM_URL={{ platform_url }} \
+            -p EXTERNAL_ROUTE={{ non_wildcard_external_host }} --namespace {{ project_name }} "
+  register: proxy_app_result
+  failed_when: (output.stderr != '' and 'already exists' not in output.stderr) or (base_host is not defined or base_host == '') or (platform_url is not defined or platform_url == '')
+  changed_when: proxy_app_result.rc == 0 or (proxy_app_result.rc == 1 and 'created' in proxy_app_result.stdout)

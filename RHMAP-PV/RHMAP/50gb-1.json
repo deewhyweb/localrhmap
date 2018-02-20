@@ -1,0 +1,21 @@
+{
+ "apiVersion": "v1",
+ "kind": "PersistentVolume",
+ "metadata": {
+ "name": "50gb-1",
+ "labels": {
+   "application": "MongoDB-replica-1"
+ }
+},
+"spec": {
+   "capacity": {
+   "storage": "50Gi"
+   },
+   "accessModes": [ "ReadWriteOnce" ],
+   "nfs": {
+      "path": "/Users/philiphayes/testnfs/mongoDb_replica_1",
+      "server": "192.168.56.1"
+   },
+   "persistentVolumeReclaimPolicy": "Recycle"
+   }
+}

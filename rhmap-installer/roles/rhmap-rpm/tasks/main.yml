@@ -1,0 +1,20 @@
+---
+
+-
+  name: "Enable and install the RHMAP RPMs repository - This can take some time, please be patient...."
+  register: output
+  yum: "name={{ item.name }} enablerepo={{ item.repo }} state={{ release }}"
+  environment:
+    http_proxy: "{{ proxy_url | default('') }}"
+    https_proxy: "{{ proxy_url | default('') }}"
+  become: true
+  with_items:
+    "{{ packages }}"
+-
+  debug: var=output
+  when: output|failed
+
+-
+  name: "Refresh the local certificate store"
+  command: "/usr/libexec/rhsmcertd-worker"
+  become: true

@@ -1,0 +1,17 @@
+# Non Wildcard Proxy project name in OpenShift
+project_name: ""
+
+# Existing RHMAP Core project name in OpenShift
+rhmap_core_project_name: ""
+
+# Domain name of the OpenShift router
+# E.g. "internal.domain.com"
+base_host: ""
+
+# URL to RHMAP studio
+# E.g. "https://rhmap.internal.domain.com"
+platform_url: ""
+
+# URL which is exposed to the Internet and is used to retrieve the API URL on application startup
+# E.g. "proxy-route.internal.domain.com" (insert value without "http(s)://")
+non_wildcard_external_host: ""

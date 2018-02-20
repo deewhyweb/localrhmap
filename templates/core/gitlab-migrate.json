@@ -1,0 +1,85 @@
+{
+  "kind": "Template",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "gitlab-migrate",
+    "annotations": {
+      "description": "Migration Pod to allow Gitlab Shell to run as arbitrary User ID",
+      "tags": "gitlab-migrate"
+    }
+  },
+  "parameters": [
+    {
+      "name": "NAMESPACE_UID",
+      "description": "The UID to which the migrated files should be chown to",
+      "required": true
+    },
+    {
+      "name": "IMAGE_NAME",
+      "description": "The Docker image to use",
+      "required": true,
+      "value": "rhmap45/gitlab-migrate"
+    },
+    {
+      "name": "IMAGE_TAG",
+      "description": "The image version to use",
+      "required": true,
+      "value": "1.0.0-12"
+    }
+  ],
+  "objects": [
+    {
+      "kind": "Pod",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "gitlab-migrate",
+        "labels": {
+          "name": "gitlab-migrate"
+        }
+      },
+      "spec": {
+            "containers": [
+              {
+                "name": "gitlab-migrate",
+                "image": "${IMAGE_NAME}:${IMAGE_TAG}",
+                "imagePullPolicy": "IfNotPresent",
+                "env" : [
+                  {
+                    "name": "NAMESPACE_UID",
+                    "value": "${NAMESPACE_UID}"
+                  }
+                ],
+                "volumeMounts": [
+                  {
+                    "name": "git-data-volume",
+                    "mountPath": "/tmp/gitlabMount"
+                  },
+                  {
+                    "name": "scm-data-volume",
+                    "mountPath": "/tmp/scmMount"
+                  }
+                ]
+              }
+            ],
+            "restartPolicy": "Never",
+            "volumes": [
+              {
+                "name": "git-data-volume",
+                "persistentVolumeClaim": {
+                  "claimName": "git-data"
+                }
+              },
+              {
+                "name": "scm-data-volume",
+                "persistentVolumeClaim": {
+                  "claimName": "scm-data"
+                }
+              }
+            ],
+            "securityContext" : {
+              "runAsUser" : 0
+            }
+       }
+    }
+  ]
+}

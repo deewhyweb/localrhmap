@@ -1,0 +1,343 @@
+
+{
+  "kind": "Template",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "mysql-PV-test",
+    "annotations": {
+      "description": "MySQL database service, with persistent storage.",
+      "iconClass": "icon-mysql-database",
+      "tags": "database,mysql"
+    }
+  },
+  "objects": [
+    {
+        "kind": "Service",
+        "apiVersion": "v1",
+        "metadata": {
+            "name": "${GLUSTER_METADATA_NAME}"
+        },
+        "spec": {
+            "ports": [
+                {
+                    "protocol": "TCP",
+                    "port": 1,
+                    "targetPort": 1
+                }
+            ]
+        },
+        "status": {
+            "loadBalancer": {}
+        }
+    },
+    {
+        "kind": "Endpoints",
+        "apiVersion": "v1",
+        "metadata": {
+            "name": "${GLUSTER_METADATA_NAME}"
+        },
+        "subsets": [
+            {
+                "addresses": [
+                    {
+                        "ip": "${GLUSTER_EP_IP}"
+                    }
+                ],
+                "ports": [
+                    {
+                        "port": 1,
+                        "protocol": "TCP"
+                    }
+                ]
+            }
+        ]
+    },
+    {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "mysql-keys"
+      },
+      "data": {
+        "mysql-host": "${DATABASE_SERVICE_NAME}",
+        "mysql-millicore-user": "${MYSQL_USER}",
+        "mysql-millicore-password": "${MYSQL_PASSWORD}",
+        "mysql-millicore-database": "${MYSQL_DATABASE}",
+        "mysql-ups-user": "${UPS_USER}",
+        "mysql-ups-password": "${UPS_PASSWORD}",
+        "mysql-ups-database": "${UPS_DATABASE}"
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "${DATABASE_SERVICE_NAME}"
+      },
+      "spec": {
+        "ports": [
+          {
+            "name": "mysql",
+            "port": 3306
+          }
+        ],
+        "selector": {
+          "name": "${DATABASE_SERVICE_NAME}"
+        }
+      }
+    },
+    {
+      "kind": "PersistentVolumeClaim",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "${DATABASE_SERVICE_NAME}"
+      },
+      "spec": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "resources": {
+          "requests": {
+            "storage": "${VOLUME_CAPACITY}"
+          }
+        }
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "${DATABASE_SERVICE_NAME}"
+      },
+      "spec": {
+        "strategy": {
+          "type": "Recreate"
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": 1,
+        "selector": {
+          "name": "${DATABASE_SERVICE_NAME}"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "name": "${DATABASE_SERVICE_NAME}"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "mysql",
+                "image": "${MYSQL_IMAGE}",
+                "ports": [
+                  {
+                    "containerPort": 3306
+                  }
+                ],
+                "livenessProbe": {
+                  "tcpSocket": {
+                    "port": 3306
+                  },
+                  "initialDelaySeconds": 600,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "failureThreshold": 2
+                },
+                "readinessProbe": {
+                  "exec": {
+                    "command": [
+                      "/bin/sh",
+                      "-ic",
+                      "MYSQL_PWD=\"$MYSQL_PASSWORD\" mysql -h 127.0.0.1 -u $MYSQL_USER -D $MYSQL_DATABASE -e 'SELECT 1'"
+                    ]
+                  },
+                  "initialDelaySeconds": 0,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "failureThreshold": 1
+                },
+                "env": [
+                  {
+                    "name": "MYSQL_USER",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mysql-keys",
+                        "key": "mysql-millicore-user"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MYSQL_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mysql-keys",
+                        "key": "mysql-millicore-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MYSQL_DATABASE",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mysql-keys",
+                        "key": "mysql-millicore-database"
+                      }
+                    }
+                  },
+                  {
+                    "name": "UPS_USER",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mysql-keys",
+                        "key": "mysql-ups-user"
+                      }
+                    }
+                  },
+                  {
+                    "name": "UPS_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mysql-keys",
+                        "key": "mysql-ups-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "UPS_DATABASE",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mysql-keys",
+                        "key": "mysql-ups-database"
+                      }
+                    }
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "3200m",
+                    "memory": "${MYSQL_MEMORY_LIMIT}"
+                  },
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "700Mi"
+                  }
+                },
+                "volumeMounts": [
+                  {
+                    "name": "mysql-data",
+                    "mountPath": "/var/lib/mysql/data"
+                  }
+                ],
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "volumes": [
+              {
+                "name": "mysql-data",
+                "persistentVolumeClaim": {
+                  "claimName": "${DATABASE_SERVICE_NAME}"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "GLUSTER_METADATA_NAME",
+      "value": "test",
+      "required": false
+    },
+    {
+      "name": "GLUSTER_EP_IP",
+      "value": "10.10.10.10",
+      "required": false
+    },
+    {
+      "name": "MYSQL_IMAGE",
+      "value": "rhmap45/mysql",
+      "required": true
+    },
+    {
+      "name": "MYSQL_IMAGE_VERSION",
+      "value": "5.5-24",
+      "required": true
+    },
+    {
+      "name": "MYSQL_MEMORY_LIMIT",
+      "displayName": "Memory Limit",
+      "description": "Maximum amount of memory the container can use.",
+      "value": "1Gi",
+      "required": true
+    },
+    {
+      "name": "DATABASE_SERVICE_NAME",
+      "displayName": "Database Service Name",
+      "description": "The name of the OpenShift Service exposed for the database.",
+      "value": "mysql",
+      "required": true
+    },
+    {
+      "name": "MYSQL_USER",
+      "displayName": "MySQL User",
+      "description": "Username for MySQL user that will be used for accessing the database.",
+      "value": "coreadmin",
+      "required": true
+    },
+    {
+      "name": "MYSQL_PASSWORD",
+      "displayName": "MySQL Password",
+      "description": "Password for the MySQL user.",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{16}",
+      "required": true
+    },
+    {
+      "name": "MYSQL_DATABASE",
+      "displayName": "MySQL Database Name",
+      "description": "Name of the MySQL database accessed.",
+      "value": "shard0",
+      "required": true
+    },
+    {
+      "name": "VOLUME_CAPACITY",
+      "displayName": "Volume Capacity",
+      "description": "Volume space available for data, e.g. 512Mi, 2Gi.",
+      "value": "1Gi",
+      "required": true
+    },
+    {
+      "name": "UPS_USER",
+      "displayName": "UPS user in MySQL",
+      "description": "Name of the MySQL user for UPS",
+      "value": "unifiedpush",
+      "required": true
+    },
+    {
+      "name": "UPS_PASSWORD",
+      "displayName": "Password for the UPS user.",
+      "description": "Password for the UPS user.",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{16}",
+      "required": true
+    },
+    {
+      "name": "UPS_DATABASE",
+      "displayName": "Name of the UPS database accessed.",
+      "description": "Name of the UPS database accessed.",
+      "value": "unifiedpush",
+      "required": true
+    }
+  ],
+  "labels": {
+    "template": "mysql-persistent-template"
+  }
+}

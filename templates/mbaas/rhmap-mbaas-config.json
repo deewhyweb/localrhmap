@@ -1,0 +1,131 @@
+{
+  "kind": "Template",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "fh-mbaas-config",
+    "annotations": {
+      "description": "Configuration for RHMAP MBaaS"
+    }
+  },
+  "objects": [
+     {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "mongo-config"
+      },
+      "data": {
+         "mongodb-admin-password": "${MONGODB_ADMIN_PASSWORD}",
+         "mongodb-keyfile-value": "${MONGODB_KEYFILE_VALUE}",
+         "mongodb-service-name": "${MONGODB_SERVICE_NAME}",
+         "mongodb-fhmbaas-user": "${MONGODB_FHMBAAS_USER}",
+         "mongodb-fhmbaas-password": "${MONGODB_FHMBAAS_PASSWORD}",
+         "mongodb-fhmbaas-database": "${MONGODB_FHMBAAS_DATABASE}",
+         "mongodb-fhreporting-user": "${MONGODB_FHREPORTING_USER}",
+         "mongodb-fhreporting-password": "${MONGODB_FHREPORTING_PASSWORD}",
+         "mongodb-fhreporting-database": "${MONGODB_FHREPORTING_DATABASE}",
+         "mongodb-replica-name": "${MONGODB_REPLICA_NAME}",
+         "mongodb-form-password": "${MONGODB_FORM_PASSWORD}"
+      }
+    },
+    {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-mbaas-info"
+      },
+      "data": {
+        "version": "4.5.3"
+      }
+    },
+    {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "node-proxy"
+      },
+      "data": {
+        "https-proxy": "${PROXY_URL}",
+        "http-proxy": "${PROXY_URL}",
+        "no-proxy": "fh-mbaas-service.${PROJECT_NAME}, fh-messaging-service.${PROJECT_NAME}, fh-metrics-service.${PROJECT_NAME}, fh-statsd-service.${PROJECT_NAME}, mongodb-1.${PROJECT_NAME}, mongodb-2.${PROJECT_NAME}, mongodb-3.${PROJECT_NAME}"
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "MONGODB_FHMBAAS_USER",
+      "value": "mbaas-user",
+      "description": "The MongoDB user name"
+    },
+    {
+      "name": "MONGODB_FHMBAAS_PASSWORD",
+      "description": "The MongoDB password",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}"
+    },
+    {
+      "name": "MONGODB_KEYFILE_VALUE",
+      "description": "The value of the MongoDB Key",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{255}"
+    },
+    {
+      "name": "MONGODB_SERVICE_NAME",
+      "value": "mongodb",
+      "description": "The MongoDB Service name"
+    },
+    {
+      "name": "MONGODB_ADMIN_PASSWORD",
+      "description": "The MongoDB Admin password",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}"
+    },
+    {
+      "name": "MONGODB_FORM_PASSWORD",
+      "description": "The MongoDB Forms User password",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}"
+    },
+    {
+      "name": "MONGODB_FHREPORTING_USER",
+      "value": "reporting-user",
+      "description": "The Reporting user name"
+    },
+    {
+      "name": "MONGODB_FHREPORTING_PASSWORD",
+      "description": "The MongoDB Reporting password",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}"
+    },
+    {
+      "name": "MONGODB_FHREPORTING_DATABASE",
+      "description": "The MongoDB Reporting Database",
+      "value": "fh-reporting",
+      "required": true
+    },
+    {
+      "name": "MONGODB_FHMBAAS_DATABASE",
+      "description": "The MongoDB Reporting Database",
+      "value": "fh-mbaas",
+      "required": true
+    },
+    {
+      "name": "MONGODB_REPLICA_NAME",
+      "description": "The MongoDB Replicaset Name",
+      "value": "",
+      "required": false
+    },
+    {
+      "name": "PROXY_URL",
+      "displayName": "Proxy Url",
+      "value": "",
+      "required": false
+    },
+    {
+      "name": "PROJECT_NAME",
+      "displayName": "RHMAP MBaaS project namespace",
+      "value": "",
+      "required": true
+    }
+  ]
+}

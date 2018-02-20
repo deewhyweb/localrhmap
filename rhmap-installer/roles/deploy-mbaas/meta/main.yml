@@ -1,0 +1,5 @@
+---
+
+dependencies:
+  - { role: gluster-fs, when: gluster_storage is defined and gluster_storage | bool, tags: gluster-fs}
+  - { role: login, updating: false }

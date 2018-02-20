@@ -1,0 +1,104 @@
+---
+
+-
+  name: "Set default template directory"
+  set_fact: mbaas_templates_dir="/opt/rhmap/{{ rhmap_version }}/templates/mbaas"
+  when: mbaas_templates_dir is not defined
+
+- include: templates_checks.yml
+
+- include: pv_checks.yml
+  when:
+    - target is undefined or target == 'enterprise'
+    - ansible_connection != 'local'
+
+-
+  name: "Create the RHMAP {{ mongo_replicas }} Node MBaaS project in OpenShift"
+  command: "oc new-project {{ project_name }}"
+  register: output
+  failed_when: output.stderr != '' and 'already exists' not in output.stderr
+  changed_when: output.rc == 0
+
+-
+  name: "Specify node-selector for the project when nodes are labeled as type=mbaas"
+  shell: "oc annotate namespace {{ project_name }} openshift.io/node-selector=type=mbaas"
+  become: true
+  when: should_annotate is defined and should_annotate
+  register: result
+  failed_when: False
+  changed_when: result.rc == 0
+
+-
+  name: "Create Nagios serviceaccount"
+  command: "oc create serviceaccount nagios --namespace {{ project_name }} "
+  register: result
+  failed_when:
+    - result.stderr != '' and 'already exists' not in result.stderr
+    - "'created' not in result.stdout"
+  changed_when: result.rc == 0
+
+
+-
+  name: "Read list of service accounts for this namepsace"
+  command: oc get policyBindings :default -n {{ project_name }} --template {% raw %}"{{(index .roleBindings 0).roleBinding.subjects}}"{% endraw %}
+  register: sa_list
+  failed_when: False
+  changed_when: False
+
+
+-
+  name: "Apply admin role to Nagios user"
+  command: "oc policy add-role-to-user admin -z nagios --namespace {{ project_name }} "
+  register: nagios_role_result
+  changed_when: "'nagios' not in sa_list.stdout and nagios_role_result.rc == 0"
+
+-
+  name: "Create RHMAP MBaaS configuration"
+  register: config_output
+  command: "oc new-app -f {{ mbaas_templates_dir }}/rhmap-mbaas-config.json --namespace {{ project_name }} \
+            -p MONGODB_REPLICA_NAME={{ replica_set_name | default('') }} \
+            -p PROXY_URL={{proxy_url | default('') }} \
+            -p PROJECT_NAME={{ project_name }}"
+  failed_when: config_output.stderr != '' and 'already exists' not in config_output.stderr
+  changed_when: config_output.rc == 0
+
+-
+  name: "Deploy standalone 1 Node Mongo"
+  include: deploy_mongo.yml file=mongo-standalone
+  when: mongo_replicas < 2
+
+-
+  name: "Deploy {{ mongo_replicas }} Node Mongo Replica Set"
+  include: deploy_mongo.yml file=mongo-replica
+  with_items: [1,2,3]
+  loop_control:
+    loop_var: replica_number
+  when: mongo_replicas > 2
+
+-
+  name: "Create the MBaaS components"
+  command: "oc new-app -f {{ mbaas_templates_dir }}/fh-mbaas-components.json \
+                          -p SMTP_SERVER={{ monitoring.smtp_server }} \
+                          -p SMTP_USERNAME={{ monitoring.smtp_username }}  \
+                          -p SMTP_PASSWORD={{ monitoring.smtp_password }} \
+                          -p SMTP_FROM_ADDRESS={{ monitoring.smtp_from_address }} \
+                          -p RHMAP_ADMIN_EMAIL={{ monitoring.rhmap_admin_email }} \
+                          -p FH_MBAAS_REPLICAS={{ component_replicas | default ('1') }} \
+                          -p FH_MESSAGING_REPLICAS={{ component_replicas | default('1')}} \
+                          -p FH_METRICS_REPLICAS={{ component_replicas | default('1') }} \
+                          --namespace {{ project_name }} "
+
+  register: create_result
+  failed_when:
+    - create_result.stderr and create_result.stderr != '' and 'already exists' not in create_result.stderr
+  changed_when: create_result.rc == 0 or (create_result.rc == 1 and 'created' in create_result.stdout)
+
+-
+  include: poller.yml pause_for=0
+  when: create_result|changed
+
+-
+  include: nagios.yml
+  tags:
+    - nagios
+

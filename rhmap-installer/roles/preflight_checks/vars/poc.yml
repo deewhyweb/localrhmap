@@ -1,0 +1,25 @@
+---
+
+strict_mode: true
+min_required_vCPUS: 4
+required_mem_mb_threshold: 7000
+warning_kb_value: 4000000
+required_100_pv: 0
+required_50_pv: 0
+required_25_pv: 3
+required_5_pv: 2
+required_1_pv: 2
+
+delay: 20
+retry_limit: 20
+interval: 30
+
+# Do not modify
+mongo_replicas: 1
+rhmap_version: "4.5"
+
+infrastructure:
+  pause_for: 20
+
+backend:
+  pause_for: 20

@@ -1,0 +1,45 @@
+---
+
+
+- name: "Check 3 nodes in MBaaS group"
+  fail:
+    msg: "You must have three nodes in the mbaas host group to deploy a 3-node-MBaaS"
+  when: groups['mbaas'] | length < 3
+
+-
+  name: "Check if nodes are already labelled for MBaaS"
+  command: oc get nodes --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }} -o jsonpath='{.items[*].metadata.labels.type}'
+  register: node_count
+  changed_when: False
+  become: True
+  failed_when: false
+
+-
+  name: "Set fact for MBaaS project Node Selector"
+  set_fact:
+    should_annotate: true
+  when:
+    -  (node_count.stdout.split(' ') | length  >=  mongo_replicas | int) or 'not found' in node_count.stderr
+
+-
+  set_fact:
+    fail_msg: "No nodes with mbaas label detected.
+      Please refer to the documentation at
+      https://access.redhat.com/documentation/en-us/red_hat_mobile_application_platform/4.3/html-single/mbaas_administration_and_installation_guide
+      for instructions on labelling for RHMAP"
+
+-
+  fail:
+    msg: "{{ fail_msg | to_nice_json }} before proceeding"
+
+  when:
+    - node_count.stdout.split(' ') | length  <  mongo_replicas | int or 'not found' in node_count.stderr
+    - strict_mode is undefined or strict_mode | bool
+
+-
+  pause:
+    prompt: "{{ fail_msg }}. Are you sure you would like to proceed with the installation?"
+  when:
+    - node_count.stdout.split(' ') | length  <  mongo_replicas | int or 'not found' in node_count.stderr
+    - strict_mode is defined or strict_mode | bool
+

@@ -1,0 +1,36 @@
+---
+
+-
+  name: "Check project_type variable is set"
+  hosts: all
+  tasks:
+
+    -
+      name: "Check required extra var is set"
+      fail:
+        msg: 'The variable "project_type" must be set to run this Playbook. Please specify either "core" or "mbaas"'
+      when: project_type is undefined
+      run_once: true
+
+
+    -
+      name: "Setting components for MBaaS"
+      set_fact:
+         pull_components: ["nagios","mongodb-1","fh-mbaas","fh-messaging","fh-metrics","fh-statsd"]
+      when: project_type == 'mbaas'
+      run_once: true
+
+    -
+      name: "Setting components for Core"
+      set_fact:
+         pull_components: ["ups","nagios","fh-aaa","fh-appstore","fh-messaging","fh-metrics","fh-ngui","fh-scm","fh-supercore","gitlab-shell","memcached","millicore","mongodb-1","mysql","redis"]
+      when: project_type == 'core'
+      run_once: true
+
+-
+  name: "Pre-Seed Docker Images for RHMAP {{ project_type | upper }}"
+  hosts: "{{ project_type | lower  }}"
+  remote_user: root
+  roles:
+    - {role: seed-images, components: "{{ pull_components }}"}
+

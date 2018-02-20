@@ -1,0 +1,166 @@
+{
+  "kind": "Template",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "nginx-proxy",
+    "description": "RHMAP proxy",
+    "tags": "rhmap,mobile,nginx,proxy"
+  },
+  "parameters": [
+    {
+      "name": "BASE_HOST",
+      "value": "http://localhost",
+      "description": "OpenShift router domain that would be used to proxy to subdomains",
+      "required": true
+    },
+    {
+      "name": "PLATFORM_URL",
+      "value": "http://localhost",
+      "description": "Full URL to core platform. For example https://rhmap.corehost.net",
+      "required": false
+    },
+    {
+      "name": "EXTERNAL_ROUTE",
+      "value": "",
+      "description": "External route to be created on router. Leave empty to autogenerate",
+      "required": false
+    },
+    {
+      "name": "FH_WILDCARD_PROXY_IMAGE",
+      "value": "rhmap45/wildcard-proxy",
+      "description": "The name of the Wildcard Proxy image",
+      "required": true
+    },
+    {
+      "name": "FH_WILDCARD_PROXY_IMAGE_VERSION",
+      "value": "1.0.0-14",
+      "description": "The version for the FH_WILDCARD_PROXY_IMAGE",
+      "required": true
+    }
+  ],
+  "objects": [
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nginx-proxy",
+        "labels": {
+          "app": "nginx-proxy"
+        }
+      },
+      "spec": {
+        "strategy": {
+          "type": "Rolling",
+          "rollingParams": {
+            "updatePeriodSeconds": 1,
+            "intervalSeconds": 1,
+            "timeoutSeconds": 600,
+            "maxUnavailable": "25%",
+            "maxSurge": "25%"
+          },
+          "resources": {}
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": 1,
+        "test": false,
+        "selector": {
+          "app": "nginx-proxy",
+          "deploymentconfig": "nginx-proxy"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "nginx-proxy",
+              "deploymentconfig": "nginx-proxy"
+            },
+            "annotations": {}
+          },
+          "spec": {
+            "containers": [
+              {
+                "name": "nginx-proxy",
+                "image": "${FH_WILDCARD_PROXY_IMAGE}:${FH_WILDCARD_PROXY_IMAGE_VERSION}",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "protocol": "TCP"
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "BASE_HOST",
+                    "value": "${BASE_HOST}"
+                  },
+                  {
+                    "name": "PLATFORM_URL",
+                    "value": "${PLATFORM_URL}"
+                  }
+                ],
+                "resources": {},
+                "terminationMessagePath": "/dev/termination-log",
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30,
+            "dnsPolicy": "ClusterFirst"
+          }
+        }
+      }
+    },
+    {
+      "kind": "Route",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "proxy-route",
+        "labels": {
+          "app": "nginx-proxy"
+        }
+      },
+      "spec": {
+        "host": "${EXTERNAL_ROUTE}",
+        "to": {
+          "kind": "Service",
+          "name": "nginx-proxy",
+          "weight": 100
+        },
+        "port": {
+          "targetPort": "8080-tcp"
+        },
+        "tls": {
+          "termination": "edge",
+          "insecureEdgeTerminationPolicy": "Redirect"
+        }
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nginx-proxy",
+        "labels": {
+          "app": "nginx-proxy"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "name": "8080-tcp",
+            "protocol": "TCP",
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ],
+        "selector": {
+          "deploymentconfig": "nginx-proxy"
+        },
+        "type": "ClusterIP",
+        "sessionAffinity": "None"
+      }
+    }
+  ]
+}

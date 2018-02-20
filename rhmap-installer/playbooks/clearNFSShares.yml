@@ -1,0 +1,52 @@
+---
+- name: "Clear NFS shares"
+  hosts: master
+  become: yes
+  vars:
+    folders:
+     - /root/volumes/1gb1
+     - /root/volumes/1gb2
+     - /root/volumes/mongoDb_replica_1
+     - /root/volumes/nagios
+     - /root/volumes/FHSCM
+     - /root/volumes/gitLabShell
+     - /root/volumes/metricsData
+     - /root/volumes/mongoDb
+     - /root/volumes/mySql
+     - /root/volumes/nagios
+     - /root/volumes/32gb
+  tasks:  
+  - name: "Mount 192.168.56.1"
+    mount:
+      name: /root/volumes
+      src: 192.168.56.1:/Users/philiphayes/testnfs
+      fstype: nfs
+      state: mounted
+    ignore_errors: false
+  - name: "Remove folders"
+    file:
+      path: "{{ item }}"
+      state: absent
+    with_items: "{{ folders }}"
+    ignore_errors: false  
+  - name: "Recreate  folders"
+    file:
+      path: "{{ item }}"
+      state: directory
+    with_items: "{{ folders }}"
+    ignore_errors: false
+  - name: Make folders mode 777
+    file:
+      path: "{{ item }}"
+      mode: u=rwX,g=rwX,o=rwX
+      recurse: yes
+    with_items: "{{ folders }}"
+  - name: "Unmount 192.168.56.1"
+    mount:
+      name: /root/volumes
+      src: 192.168.56.1:/Users/philiphayes/testnfs
+      fstype: nfs
+      state: unmounted
+    ignore_errors: false
+
+    

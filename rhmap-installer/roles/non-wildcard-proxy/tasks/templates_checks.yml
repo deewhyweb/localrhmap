@@ -1,0 +1,31 @@
+---
+
+-
+  block:
+
+  -
+    name: Check the presence of Non Wildcard Proxy template
+    stat:
+      path: "{{ core_templates_dir }}/fh-nginx-proxy-template.json"
+    register: file_result
+    failed_when:
+      - file_result.stat.exists == false
+
+
+  # If some of the checks above fail (templates could not be found),
+  # we want to pause the installation and inform the user about it
+  rescue:
+
+    -
+      name: "Template not found"
+      pause:
+        prompt: |
+
+          Required templates were not found in the specified directory
+
+          [N.B.] Please check the error message and correct the problem accordingly
+
+          Default path to the templates is /opt/rhmap/v4.x/templates/
+          Also you can specify the path by passing the parameter '-e core_templates_dir=PATH_TO_TEMPLATES'
+
+          Hit Ctrl + c and then 'a' to abort the installation

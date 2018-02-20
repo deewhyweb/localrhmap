@@ -1,0 +1,85 @@
+---
+release_version: 4.4.3
+deployments:
+  - name: "redis"
+    containers:
+    - name: "redis"
+      image: "rhmap44/redis:2.8.21-28"
+  - name: "memcached"
+    containers:
+    - name: "memcached"
+      image: "rhmap44/memcached:1.4.15-18"
+  - name: "mysql"
+    containers:
+    - name: "mysql"
+      image: "rhmap44/mysql:5.5-15"
+  - name: "mongodb-1"
+    containers:
+    - name: "mongodb"
+      image: "rhmap44/mongodb:centos-3.2-18"
+  - name: "mongodb-2"
+    containers:
+    - name: "mongodb"
+      image: "rhmap44/mongodb:centos-3.2-18"
+  - name: "mongodb-3"
+    containers:
+    - name: "mongodb"
+      image: "rhmap44/mongodb:centos-3.2-18"
+  - name: "nagios"
+    containers:
+    - name: "nagios"
+      image: "rhmap44/nagios:4.0.8-42"
+  - name: "fh-aaa"
+    containers:
+    - name: "fh-aaa"
+      image: "rhmap44/fh-aaa:1.0.5-6"
+  - name: "fh-mbaas"
+    containers:
+    - name: "fh-mbaas"
+      image: "rhmap44/fh-mbaas:5.4.4-1"
+  - name: "fh-messaging"
+    containers:
+    - name: "fh-messaging"
+      image: "rhmap44/fh-messaging:3.0.7-7"
+  - name: "fh-metrics"
+    containers:
+    - name: "fh-metrics"
+      image: "rhmap44/fh-metrics:3.0.6-7"
+  - name: "fh-scm"
+    containers:
+    - name: "fh-scm"
+      image: "rhmap44/fh-scm:1.0.6-9"
+  - name: "fh-statsd"
+    containers:
+    - name: "fh-statsd"
+      image: "rhmap44/fh-statsd:2.0.4-8"
+  - name: "fh-supercore"
+    containers:
+    - name: "fh-supercore"
+      image: "rhmap44/fh-supercore:4.13.1-1"
+  - name: "gitlab-shell"
+    containers:
+    - name: "gitlab-shell"
+      image: "rhmap44/gitlab-shell:2.1.2-1"
+    - name: "gitlab-httpd-proxy"
+      image: "rhmap44/httpd:2.4-25"
+  - name: "fh-ngui"
+    containers:
+    - name: "fh-ngui"
+      image: "rhmap44/fh-ngui:5.8.2-1"
+  - name: "ups"
+    containers:
+    - name: "ups"
+      image: "rhmap44/ups-eap:1.1.4-14"
+  - name: "fh-appstore"
+    containers:
+    - name: "fh-appstore"
+      image: "rhmap44/fh-appstore:2.0.3-6"
+  - name: "millicore"
+    containers:
+    - name: "millicore"
+      image: "rhmap44/millicore:7.47.2-1"
+    - name: "rhmap-proxy"
+      image: "rhmap44/httpd:2.4-25"
+    - name: "feedhenry-sdks"
+      image: "rhmap44/fh-sdks:1.0.0-20"

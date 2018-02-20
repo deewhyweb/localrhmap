@@ -1,0 +1,100 @@
+---
+
+-
+  name: "Include release specific image versions"
+  include_vars: ../../../shared_files/{{ rhmap_version }}.yml
+
+-
+  name: "Patch the new image of fh-supercore"
+  command: "oc patch dc fh-supercore --patch='{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"fh-supercore\",\"image\":\"{{ item.containers.0.image }}\" }]}}}}' --namespace {{ project_name }}"
+  with_items:
+    - "{{ deployments }}"
+  register: patch_result
+  when:
+    - item.name == 'fh-supercore'
+  failed_when: patch_result.stderr != '' and 'not found' not in patch_result.stderr
+  changed_when: patch_result.rc == 0
+  loop_control:
+    pause: 1
+
+- include: ../../tasks/poller.yml pause_for=10 retry_limit=12 delay=10 interval=10
+
+-
+  name: "Retrieve admin oc token"
+  shell: "oc whoami -t"
+  register: oc_token
+-
+  name: "Retrieve route to studio"
+  shell: "oc get routes rhmap --namespace {{ project_name }} | grep -v NAME | awk '{print $2}'"
+  register: studio_route
+-
+  name: "Call the supercore endpoint"
+  uri:
+    url: "https://{{studio_route.stdout}}/api/v2/environments/openshift/migrate?token={{oc_token.stdout}}"
+    validate_certs: "{{ 'no' if skip_tls | default('false') | bool else 'yes' }}"
+  environment:
+    http_proxy: "{{ proxy_url | default('') }}"
+    https_proxy: "{{ proxy_url | default('') }}"
+  register: migrate_endpoint_response
+
+-
+  name: "Determine whether BUILDFARM_VERSION variable already exist"
+  command: oc get dc millicore -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="BUILDFARM_VERSION")].value}' --namespace {{ project_name }}
+  register: bf_version_variable
+
+-
+  name: "Add required environment variable to millicore if they're not already present"
+  command: |
+    oc env dc millicore --containers=millicore  BUILDFARM_VERSION=1 BUILDFARM_HOST= BUILDFARM_USERNAME= BUILDFARM_PASSWORD=
+    BUILDFARM_PLATFORMS= BUILDFARM_BUILD_TIMEOUT=3600 BUILDFARM_BUILD_POLLING_INTERVAL=10 BUILDER_BUILD_TIMEOUT=9000000
+    BUILDFARM_BUILDS_DAYS=30 BUILDFARM_BUILDS_TOTAL= BUILDFARM_ARTIFACTS_DAYS=30 BUILDFARM_ARTIFACTS_TOTAL=
+    --overwrite=false --namespace {{ project_name }}
+  when: bf_version_variable.stdout == ""
+
+-
+  name: "Cancel millicore redeploy until patching image version"
+  command: oc deploy millicore --cancel --namespace {{ project_name }}
+
+-
+  name: "set fact"
+  set_fact:
+    updating: true
+
+-
+  name: "Set Nagios Liveness Probes"
+  command: "oc set probe dc/nagios --liveness --open-tcp=8080 --initial-delay-seconds=60 --timeout-seconds=5 --period-seconds=60 --success-threshold=1 --failure-threshold=3 --namespace={{ project_name }}"
+  register: nagios_liveness_probe
+
+-
+  name: "Set Nagios Readiness Probes"
+  command: "oc set probe dc/nagios --readiness --open-tcp=8080 --initial-delay-seconds=50 --timeout-seconds=5 --period-seconds=10 --success-threshold=1 --failure-threshold=1 --namespace={{ project_name }}"
+  register: nagios_readiness_probe
+
+- include: ../../tasks/poller.yml
+
+-
+  name: "Update Millicore liveness and readiness probes"
+  command: "oc patch dc millicore --namespace {{ project_name }} --patch='{\"spec\":{\"template\":{\"spec\":{\"containers\":[{\"name\":\"millicore\",\"livenessProbe\":{\"failureThreshold\": 2, \"initialDelaySeconds\": 600, \"periodSeconds\": 60, \"successThreshold\": 1, \"timeoutSeconds\": 5, \"httpGet\":{\"path\": \"/box/api/sys/info/ping?mysql=true\",\"port\":8080,\"scheme\":\"HTTP\"} }, \"readinessProbe\":{\"failureThreshold\": 1, \"initialDelaySeconds\": 100, \"periodSeconds\": 10, \"successThreshold\": 1, \"timeoutSeconds\": 5, \"httpGet\":{\"path\": \"/box/api/sys/info/ping?mysql=true\",\"port\":8080,\"scheme\":\"HTTP\"} }}]}}}}'"
+
+-
+  name: "Cancel millicore redeploy until patching image version"
+  command: oc deploy millicore --cancel --namespace {{ project_name }}
+
+-
+  name: "Remove unused proxy vars from ups"
+  command: oc env dc/ups SOCKS_PROXY_HOST- SOCKS_PROXY_PORT- --namespace {{ project_name }}
+
+- include: ../../tasks/poller.yml
+
+-
+  name: "Read redis definition"
+  set_fact:
+    redis_image_def: "{{ deployments | selectattr('name', 'match', '^redis$') | map(attribute='containers') | list }}"
+-
+  name: "Get image version"
+  set_fact:
+    redis_image: "{{ redis_image_def[0][0].image.split(':') }}"
+
+-
+  name: "Set Redis values in supercore"
+  command: oc env dc fh-supercore CLOUD_APP_REDIS_IMAGE="rhmap45/redis" CLOUD_APP_REDIS_IMAGE_VERSION={{ redis_image[1] }} --namespace {{ project_name }}

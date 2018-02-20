@@ -1,0 +1,31 @@
+---
+
+# These values should be updated as part of RHMAP-15676 which relies on completion of RHMAP-15674
+# Using default values
+min_required_vCPUS: 2
+required_mem_mb_threshold: 7000
+warning_kb_value: 4000000
+required_100_pv: 0
+required_50_pv: 0
+required_40_pv: 1
+required_25_pv: 0
+required_10_pv: 1
+required_5_pv: 0
+required_1_pv: 1
+
+pause_for: 0
+retry_limit: 20
+interval: 30
+
+role: "buildfarm"
+buildfarm_version: "2.0"
+buildfarm_templates_dir: /tmp
+
+# Do not modify
+strict_mode: true
+rhmap_version: "4.5"
+
+buildfarm:
+   pause_for: 20
+
+concurrent_android_builds: 10

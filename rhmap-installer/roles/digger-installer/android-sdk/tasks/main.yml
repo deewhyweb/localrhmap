@@ -1,0 +1,231 @@
+---
+## setup default template directories
+-
+  name: "Check and include productised release image versions"
+  include_vars: ../shared_files/{{ rhmap_version }}.yml
+  when: rhmap_version is defined
+  tags:
+    - deploy-sdk-pod
+
+- name: "Include var file for community resources"
+  include_vars: vars/buildfarm.yml
+  when: rhmap_version is not defined
+  tags:
+    - deploy-sdk-pod
+
+-
+  name: "Read android sdk definition"
+  set_fact:
+    android_sdk_image_def: "{{ deployments | selectattr('name', 'match', '^android-sdk$') | map(attribute='containers') | list }}"
+  tags:
+    - deploy-sdk-pod
+
+-
+  name: "Get image version"
+  set_fact:
+    android_sdk_image: "{{ android_sdk_image_def[0][0].image }}"
+  tags:
+    - deploy-sdk-pod
+
+-
+  name: "Update local android-sdk-persistent template with image version and tag"
+  template:
+    src: android-sdk-persistent-template.j2
+    dest: "{{ buildfarm_templates_dir }}/android-sdk-persistent-template.json"
+  tags:
+    - deploy-sdk-pod
+
+- name: "Create project"
+  command: "oc new-project {{ project_name }} --namespace={{ project_name }}"
+  register: create_project_result
+  failed_when: create_project_result.stderr and create_project_result.stderr != '' and 'already exists' not in create_project_result.stderr
+  changed_when: create_project_result.rc == 0 or (create_project_result == 1 and 'created' in create_project_result.stdout)
+  tags:
+    - deploy-sdk-pod
+
+-
+  name: "Deploy the Android SDK image"
+  command: "oc new-app --namespace={{ project_name }} -f {{ buildfarm_templates_dir }}/android-sdk-persistent-template.json"
+  register: android_create_result
+  failed_when:
+    - android_create_result.stderr and android_create_result.stderr != '' and 'already exists' not in android_create_result.stderr
+  changed_when: android_create_result.rc == 0 or (android_create_result.rc == 1 and 'created' in android_create_result.stdout)
+  tags:
+    - deploy-sdk-pod
+
+-
+  name: "Pausing for Pods to create"
+  pause: seconds=10
+  when: android_create_result|changed
+  tags:
+    - deploy-sdk-pod
+
+-
+  name: Determine what polling logic to use
+  local_action: stat path=../playbooks/tasks/poller.yml
+  register: poller
+
+
+- include: ../playbooks/tasks/poller.yml
+  static: no
+  when: poller.stat.exists
+
+-
+  block:
+
+    -
+      name: "Poll for Pods to become ready"
+      command: oc get dc android-sdk --namespace={{ project_name }} --output jsonpath='{.status.availableReplicas}'
+      register: poll_result
+      until: poll_result.rc == 0 and poll_result.stdout | int > 0
+      retries: 60
+      delay: 10
+      tags:
+        - deploy-sdk-pod
+  rescue:
+
+    -
+      name: "Attempting redeploy of failed Pod"
+      command: oc deploy --retry dc/android-sdk --namespace={{ project_name }}
+  when: not poller.stat.exists
+
+-
+  name: "Get the Android SDK pod name"
+  shell: "oc get pods --namespace={{ project_name }} | grep android-sdk | grep -v deploy | awk '{print$1}'"
+  failed_when: output.stdout == ""
+  register: output
+  changed_when: False
+  tags:
+    - install-sdk
+
+-
+  name: "Register android-sdk pod name"
+  set_fact:
+    android_sdk_podname: "{{ output.stdout }}"
+  tags:
+    - install-sdk
+-
+  name: "Set random filename"
+  set_fact:
+    config_file: "sample{{ 10000 | random }}.cfg"
+  tags:
+    - install-sdk
+
+-
+  debug:
+    msg: "Filename set to {{ config_file }}"
+  tags:
+    - install-sdk
+
+-
+  name: "Template out configuaration file"
+  template:
+    src: sample_cfg.j2
+    dest: /tmp/{{ config_file }}
+    force: yes
+  vars:
+    components: "{{ android_sdk_components }}"
+    keystore: "{{ android_debug_keystore }}"
+  tags:
+    - install-sdk
+# Leaving in command below as comment as we can use this once the miniumum supported version of OpenShift is 3.5
+#-
+#  name: "Copy the Android SDK config file to the container"
+#  command: "oc cp --namespace={{ project_name }} /tmp/{{ config_file }} {{ android_sdk_podname }}:/opt/tools/{{ config_file }}"
+#  register: cp_cmd
+
+# install the config file
+-
+  name: "Copy the Android SDK config file to the container"
+  shell: "oc exec -i {{ android_sdk_podname }} --namespace={{ project_name }} -- bash -c 'cat > /opt/tools/{{ config_file }}' < /tmp/{{ config_file }}"
+  tags:
+    - install-sdk
+
+-
+  name: "Set permission on the file"
+  shell: "oc exec -i {{ android_sdk_podname }} --namespace={{ project_name }} -- bash -c 'chmod 775 /opt/tools/{{ config_file }}'"
+  tags:
+    - install-sdk
+
+-
+  name: "Checks if android sdk folder already exists"
+  stat:
+    path: "{{ android_sdk_home }}"
+  register: sdk_folder
+  tags:
+    - install-sdk
+
+-
+  name: "Install the Android SDK"
+  command: "oc rsh --namespace={{ project_name }} {{ android_sdk_podname }} androidctl sdk install"
+  when: sdk_folder.stat.exists == False
+  tags:
+    - install-sdk
+
+# sync using the config file
+
+-
+  name: "Sync Android Platform Versions via config"
+  command: "oc rsh --namespace={{ project_name }} {{ android_sdk_podname }} androidctl-sync /opt/tools/{{ config_file }}"
+  register: rsh_cmd
+  failed_when: "'Traceback' in rsh_cmd.stdout or 'Common Arguments' in rsh_cmd.stdout"
+  tags:
+    - install-sdk
+
+- debug:
+    msg: "Licences are up to date. Continuing...."
+  when: "'Accept?' not in rsh_cmd.stdout"
+  tags:
+    - install-sdk
+
+- pause:
+    prompt:  "{{ rsh_cmd.stdout.split('--------------------')[1] }} Hit enter to accept the Licence or hit Ctrl _c and 'A' to reject and cancel the installation."
+  when: "'Accept?' in rsh_cmd.stdout"
+  tags:
+    - install-sdk
+
+- name: "Licence accepted. Installing SDK ** Note ** This task may take some time, please be patient"
+  command: "oc rsh --namespace={{ project_name }} {{ android_sdk_podname }} androidctl-sync -y /opt/tools/{{ config_file }}"
+  when: "'Accept?' in rsh_cmd.stdout"
+  tags:
+    - install-sdk
+
+-
+  name: "Check gradle wrapper exists"
+  command: oc exec --namespace={{ project_name }} {{ android_sdk_podname }} -i -- bash -c 'stat {{ android_sdk_home }}/tools/templates/gradle/wrapper/gradlew'
+  register: gradlew_status
+  failed_when: False
+  changed_when: False
+  tags:
+    - install-sdk
+
+-
+  block:
+  -
+    name: "Create required directory"
+    command: oc exec --namespace={{ project_name }} {{ android_sdk_podname }} -i -- bash -c 'mkdir -p {{ android_sdk_home }}/tools/templates/gradle/wrapper'
+
+  -
+    name: "Create temp folder"
+    file:
+      path: /tmp/digger-installer
+      state: directory
+      mode: 0777
+
+  -
+    name: "Copy gradlew to remote temp folder"
+    copy:
+      src: gradle-wrapper.tar.gz
+      dest: /tmp/digger-installer/gradle-wrapper.tar.gz
+      mode: 0777
+
+  -
+    name: "Copy required tarball"
+    command: oc rsync --namespace={{ project_name }} /tmp/digger-installer/ {{ android_sdk_podname }}:{{ android_sdk_home }}/tools/templates/gradle/wrapper/ --include='gradle-wrapper.tar.gz'
+
+  -
+    name: "Unarchive gradle files"
+    command: oc exec --namespace={{ project_name }} {{ android_sdk_podname }} -i -- bash -c 'tar -zxvf {{ android_sdk_home }}/tools/templates/gradle/wrapper/gradle-wrapper.tar.gz -C {{ android_sdk_home }}/tools/templates/gradle/wrapper'
+  when: gradlew_status.rc != 0
+  tags:
+    - install-sdk

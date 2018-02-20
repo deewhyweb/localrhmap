@@ -1,0 +1,266 @@
+{
+  "kind": "Template",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "mongodb-3-node-replica-set",
+    "annotations": {
+      "description": "Red Hat Mobile Backend as a Service Mongo Replica Set template",
+      "iconClass": "icon-mongodb"
+    }
+  },
+  "objects": [
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "mongodb-${MONGO_INSTANCE}",
+        "labels": {
+          "name": "mongodb-${MONGO_INSTANCE}"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "port": 27017
+          }
+        ],
+        "selector": {
+          "name": "mongodb-replica-${MONGO_INSTANCE}"
+        },
+        "clusterIP": "None"
+      }
+    },
+    {
+      "kind": "PersistentVolumeClaim",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "mongodb-claim-${MONGO_INSTANCE}"
+      },
+      "spec": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "resources": {
+          "requests": {
+            "storage": "${MONGODB_PVC_SIZE}"
+          }
+        }
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "mongodb-${MONGO_INSTANCE}",
+        "labels": {
+          "name": "mongodb"
+        }
+      },
+      "spec": {
+        "strategy": {
+          "type": "Recreate",
+          "resources": {
+            "limits": {
+              "cpu": "1000m",
+              "memory": "1000Mi"
+            },
+            "requests": {
+              "cpu": "200m",
+              "memory": "200Mi"
+            }
+          }
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": 1,
+        "selector": {
+          "name": "mongodb-replica-${MONGO_INSTANCE}"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "name": "mongodb-replica-${MONGO_INSTANCE}"
+            }
+          },
+          "spec": {
+            "nodeSelector": {
+              "mbaas_id": "mbaas${MONGO_INSTANCE}"
+            },
+            "volumes": [
+              {
+                "name": "mongodb-data-volume",
+                "persistentVolumeClaim": {
+                  "claimName": "mongodb-claim-${MONGO_INSTANCE}"
+                }
+              }
+            ],
+            "containers": [
+              {
+                "name": "mongodb",
+                "image": "${MONGODB_IMAGE}:${MONGODB_IMAGE_VERSION}",
+                "command": [
+                  "run-mongod-replication"
+                ],
+                "ports": [
+                  {
+                    "containerPort": 27017
+                  }
+                ],
+                "volumeMounts": [
+                  {
+                    "name": "mongodb-data-volume",
+                    "mountPath": "/var/lib/mongodb/data"
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "MONGODB_REPLICA_NAME",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-replica-name"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_SERVICE_NAME",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-service-name"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_KEYFILE_VALUE",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-keyfile-value"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHMBAAS_USER",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhmbaas-user"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHMBAAS_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhmbaas-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHMBAAS_DATABASE",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhmbaas-database"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_ADMIN_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-admin-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_USER",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhreporting-user"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhreporting-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_DATABASE",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongo-config",
+                        "key": "mongodb-fhreporting-database"
+                      }
+                    }
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "1000m",
+                    "memory": "1000Mi"
+                  },
+                  "requests": {
+                    "cpu": "200m",
+                    "memory": "200Mi"
+                  }
+                },
+                "livenessProbe": {
+                  "failureThreshold": 2,
+                  "initialDelaySeconds": 5,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "tcpSocket": {
+                    "port": 27017
+                  },
+                  "timeoutSeconds": 5
+                },
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "MONGODB_IMAGE",
+      "value": "rhmap45/mongodb",
+      "description": "The name of the mongodb image"
+    },
+    {
+      "name": "MONGODB_IMAGE_VERSION",
+      "value": "3.2-31",
+      "description": "The version for the MONGODB_IMAGE"
+    },
+    {
+      "name": "ENDPOINT_COUNT",
+      "description": "The number of databases to create in a replica set",
+      "value": "3"
+    },
+    {
+      "name": "MONGODB_PVC_SIZE",
+      "description": "The size of the volume for MongoDB Data",
+      "value": "50Gi",
+      "required": true
+    },
+    {
+      "name": "MONGO_INSTANCE",
+      "description": "The Mongo service number",
+      "required": true
+    }
+  ]
+}

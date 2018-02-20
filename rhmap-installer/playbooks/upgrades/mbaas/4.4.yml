@@ -1,0 +1,27 @@
+---
+
+-
+  name: 'Add required environment variable MONGODB_ENDPOINT_COUNT'
+  shell: 'oc env dc nagios MONGODB_ENDPOINT_COUNT={{mongo_replicas}} --namespace {{ project_name }}'
+
+
+-
+  name: "Read list of Mongo dcs"
+  shell: oc get dc --namespace {{ project_name }} | grep mongodb | grep -v NAME | awk '{print $1}'
+  register: dcs
+
+-
+  name: "Patch Mongo container names"
+  shell: "oc patch dc {{ item }} --type='json' \
+          -p='[ {\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/name\",\"value\":\"mongodb\" }]' --namespace {{ project_name }}"
+  with_items:
+    - "{{ dcs.stdout_lines}}"
+
+-
+  name: 'Add Annotations to fh-mbaas-service'
+  # we add annotations to simply to improve the ui in OpenShift by grouping the similar pods together.
+  shell: oc annotate svc fh-mbaas-service service.alpha.openshift.io/dependencies='[{"name":"mongodb-1","namespace":"","kind":"Service"},{"name":"fh-messaging-service","namespace":"","kind":"Service"},{"name":"fh-metrics-service","namespace":"","kind":"Service"},{"name":"fh-statsd-service","namespace":"","kind":"Service"}]' --overwrite=true --namespace {{ project_name }}
+
+-
+  name: 'Add ConfigMap Volume mount to fh-statsd'
+  shell: oc volume dc/fh-statsd --add --name=node-proxy --type=configMap --configmap-name=node-proxy --overwrite --namespace {{ project_name }}

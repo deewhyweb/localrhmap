@@ -1,0 +1,21 @@
+{
+ "apiVersion": "v1",
+ "kind": "PersistentVolume",
+ "metadata": {
+ "name": "5gb-1",
+ "labels": {
+   "application": "MySql"
+ }
+},
+"spec": {
+   "capacity": {
+   "storage": "5Gi"
+   },
+   "accessModes": [ "ReadWriteOnce" ],
+   "nfs": {
+      "path": "/Users/philiphayes/testnfs/mySql",
+      "server": "192.168.56.1"
+   },
+   "persistentVolumeReclaimPolicy": "Recycle"
+   }
+}

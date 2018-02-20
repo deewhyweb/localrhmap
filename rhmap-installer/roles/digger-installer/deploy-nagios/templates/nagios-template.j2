@@ -1,0 +1,284 @@
+{
+  "apiVersion": "v1",
+  "kind": "Template",
+  "metadata": {
+    "name": "nagios-template"
+  },
+  "objects": [
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "nagios"
+      },
+      "spec": {
+        "ports": [
+          {
+            "port": 8080
+          }
+        ],
+        "selector": {
+          "name": "nagios"
+        }
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Route",
+      "metadata": {
+        "name": "nagios"
+      },
+      "spec": {
+        "host": "",
+        "tls": {
+          "insecureEdgeTerminationPolicy": "Allow",
+          "termination": "edge"
+        },
+        "to": {
+          "kind": "Service",
+          "name": "nagios"
+        }
+      }
+    },
+    {
+      "kind": "PersistentVolumeClaim",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nagios-claim-1"
+      },
+      "spec": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "resources": {
+          "requests": {
+            "storage": "1Gi"
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "DeploymentConfig",
+      "metadata": {
+        "name": "nagios"
+      },
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "name": "nagios"
+        },
+        "strategy": {
+          "type": "Recreate"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "name": "nagios"
+            }
+          },
+          "spec": {
+            "volumes": [
+              {
+                "name": "nagios-data-volume",
+                "persistentVolumeClaim": {
+                  "claimName": "nagios-claim-1"
+                }
+              }
+            ],
+            "containers": [
+              {
+                "env": [
+                  {
+                    "name": "SMTP_SERVER",
+                    "value": "${SMTP_SERVER}"
+                  },
+                  {
+                    "name": "SMTP_USERNAME",
+                    "value": "${SMTP_USERNAME}"
+                  },
+                  {
+                    "name": "SMTP_PASSWORD",
+                    "value": "${SMTP_PASSWORD}"
+                  },
+                  {
+                    "name": "SMTP_TLS",
+                    "value": "${SMTP_TLS}"
+                  },
+                  {
+                    "name": "SMTP_FROM_ADDRESS",
+                    "value": "${SMTP_FROM_ADDRESS}"
+                  },
+                  {
+                    "name": "RHMAP_ADMIN_EMAIL",
+                    "value": "${RHMAP_ADMIN_EMAIL}"
+                  },
+                  {
+                    "name": "NAGIOS_USER",
+                    "value": "${NAGIOS_USER}"
+                  },
+                  {
+                    "name": "NAGIOS_PASSWORD",
+                    "value": "${NAGIOS_PASSWORD}"
+                  },
+                  {
+                    "name": "RHMAP_ROUTER_DNS",
+                    "value": "${RHMAP_ROUTER_DNS}"
+                  },
+                  {
+                    "name": "RHMAP_HOSTGROUPS",
+                    "value": "${RHMAP_HOSTGROUPS}"
+                  },
+                  {
+                    "name": "JENKINS_HOST",
+                    "value": "${JENKINS_HOST}"
+                  },
+                  {
+                    "name": "JENKINS_USER",
+                    "value": "${JENKINS_USER}"
+                  },
+                  {
+                    "name": "JENKINS_PASS",
+                    "value": "${JENKINS_PASS}"
+                  },
+                  {
+                    "name": "PLATFORMS",
+                    "value": "${PLATFORMS}"
+                  }
+                ],
+                "image": "${NAGIOS_IMAGE}",
+                "name": "nagios",
+                "ports": [
+                  {
+                    "containerPort": 8080
+                  }
+                ],
+                "volumeMounts": [
+                  {
+                    "name": "nagios-data-volume",
+                    "mountPath": "/var/log/nagios"
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "800m",
+                    "memory": "800Mi"
+                  },
+                  "requests": {
+                    "cpu": "200m",
+                    "memory": "200Mi"
+                  }
+                },
+                "readinessProbe": {
+                  "failureThreshold": 3,
+                  "initialDelaySeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "tcpSocket": {
+                    "port": 8080
+                  },
+                  "timeoutSeconds": 5
+                },
+                "livenessProbe": {
+                  "failureThreshold": 3,
+                  "initialDelaySeconds": 60,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "tcpSocket": {
+                    "port": 8080
+                  },
+                  "timeoutSeconds": 5
+                }
+              }
+            ],
+            "serviceAccount": "nagios"
+          }
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ]
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "description": "SMTP server address to use for sending alert emails e.g. 1.2.3.4:25",
+      "name": "SMTP_SERVER",
+      "value": "{{ smtp_server }}"
+    },
+    {
+      "name": "SMTP_USERNAME",
+      "description": "SMTP username",
+      "value": "{{ smtp_username }}"
+    },
+    {
+      "name": "SMTP_PASSWORD",
+      "description": "SMTP password",
+      "value": "{{ smtp_password }}"
+    },
+    {
+      "description": "Use TLS for message delivery (auto|yes|no)",
+      "name": "SMTP_TLS",
+      "value": "auto"
+    },
+    {
+      "description": "From email address for alerts",
+      "name": "SMTP_FROM_ADDRESS",
+      "value": "{{ smtp_from_address }}"
+    },
+    {
+      "description": "To email address for alerts",
+      "name": "RHMAP_ADMIN_EMAIL",
+      "value": "{{ rhmap_admin_email }}"
+    },
+    {
+      "description": "Nagios admin username",
+      "name": "NAGIOS_USER",
+      "value": "nagiosadmin"
+    },
+    {
+      "description": "Nagios admin user password",
+      "from": "[a-zA-Z0-9]{10}",
+      "generate": "expression",
+      "name": "NAGIOS_PASSWORD"
+    },
+    {
+      "description": "Host or Service name for RHMAP",
+      "name": "RHMAP_ROUTER_DNS",
+      "value": "localhost"
+    },
+    {
+      "description": "RHMAP hostgroups being monitored (core|mbaas|digger|core,mbaas)",
+      "name": "RHMAP_HOSTGROUPS",
+      "value": "digger"
+    },
+    {
+      "description": "The name and tag of the Nagios Docker image",
+      "name": "NAGIOS_IMAGE",
+      "value": "{{ nagios_image_version }}"
+    },
+    {
+      "description": "The url(s) of the Jenkins instance",
+      "name": "JENKINS_HOST",
+      "value": "{{ jenkins_url }}"
+    },
+    {
+      "description": "The Jenkins user name",
+      "name": "JENKINS_USER",
+      "value": "{{ jenkins_user | default('admin') }}"
+    },
+    {
+      "description": "The user password",
+      "name": "JENKINS_PASS",
+      "value": "{{ jenkins_pass | default('password')}}"
+    },
+    {
+      "name": "PLATFORMS",
+      "description": "The services that should be monitored. Format 'ios,android'",
+      "value": "{{ digger_platforms | default('android') }}",
+      "value": {% if digger_platforms is defined and digger_platforms != ''%}"{{ digger_platforms }}"{% elif groups['macos'] is defined and groups['macos'] | length > 0 %}"android,ios"{% else %}"android"{% endif %}
+    }
+  ]
+}

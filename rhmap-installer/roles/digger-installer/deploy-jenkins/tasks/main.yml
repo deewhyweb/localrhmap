@@ -1,0 +1,51 @@
+---
+
+
+-
+  name: "Update local jenkins-persistent template"
+  template:
+      src: jenkins-persistent-template.j2
+      dest: "{{ buildfarm_templates_dir }}/jenkins-persistent-template.json"
+
+# Deploy Jenkins instance
+-
+  name: "Create Project for Jenkins"
+  command: "oc new-project {{ project_name }}"
+  register: output
+  failed_when: output.stderr != '' and 'already exists' not in output.stderr
+
+-
+  name: "Deploy the Jenkins Instance"
+  command: "oc new-app --namespace {{ project_name }} -f {{ buildfarm_templates_dir }}/jenkins-persistent-template.json"
+  register: jenkins_create_result
+  failed_when:
+    - jenkins_create_result.stderr and jenkins_create_result.stderr != '' and 'already exists' not in jenkins_create_result.stderr
+  changed_when: jenkins_create_result.rc == 0 or (jenkins_create_result.rc == 1 and 'created' in jenkins_create_result.stdout)
+
+-
+  name: Determine what polling logic to use
+  local_action: stat path=../playbooks/tasks/poller.yml
+  register: poller
+
+
+- include: ../playbooks/tasks/poller.yml
+  static: no
+  when: poller.stat.exists
+
+-
+  block:
+
+    -
+      name: "Poll for Pods to become ready"
+      command: oc get dc jenkins --namespace={{ project_name }} --output jsonpath='{.status.availableReplicas}'
+      register: poll_result
+      until: poll_result.rc == 0 and poll_result.stdout | int > 0
+      retries: 60
+      delay: 10
+      when: jenkins_create_result|changed
+  rescue:
+
+    -
+      name: "Attempting redeploy of failed Pod"
+      command: oc deploy --retry dc/jenkins --namespace={{ project_name }}
+  when: not poller.stat.exists

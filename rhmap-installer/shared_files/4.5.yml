@@ -1,0 +1,93 @@
+---
+release_version: 4.5.3
+deployments:
+  - name: "redis"
+    containers:
+    - name: "redis"
+      image: "rhmap45/redis:2.8.21-36"
+  - name: "memcached"
+    containers:
+    - name: "memcached"
+      image: "rhmap45/memcached:1.4.15-28"
+  - name: "mysql"
+    containers:
+    - name: "mysql"
+      image: "rhmap45/mysql:5.5-24"
+  - name: "mongodb-1"
+    containers:
+    - name: "mongodb"
+      image: "rhmap45/mongodb:3.2-31"
+  - name: "mongodb-2"
+    containers:
+    - name: "mongodb"
+      image: "rhmap45/mongodb:3.2-31"
+  - name: "mongodb-3"
+    containers:
+    - name: "mongodb"
+      image: "rhmap45/mongodb:3.2-31"
+  - name: "nagios"
+    containers:
+    - name: "nagios"
+      image: "rhmap45/nagios:4.0.8-53"
+  - name: "fh-aaa"
+    containers:
+    - name: "fh-aaa"
+      image: "rhmap45/fh-aaa:1.0.5-18"
+  - name: "fh-mbaas"
+    containers:
+    - name: "fh-mbaas"
+      image: "rhmap45/fh-mbaas:5.8.1-5"
+  - name: "fh-messaging"
+    containers:
+    - name: "fh-messaging"
+      image: "rhmap45/fh-messaging:3.0.9-5"
+  - name: "fh-metrics"
+    containers:
+    - name: "fh-metrics"
+      image: "rhmap45/fh-metrics:3.0.7-6"
+  - name: "fh-scm"
+    containers:
+    - name: "fh-scm"
+      image: "rhmap45/fh-scm:1.0.8-7"
+  - name: "fh-statsd"
+    containers:
+    - name: "fh-statsd"
+      image: "rhmap45/fh-statsd:2.0.4-17"
+  - name: "fh-supercore"
+    containers:
+    - name: "fh-supercore"
+      image: "rhmap45/fh-supercore:4.22.1-4"
+  - name: "gitlab-shell"
+    containers:
+    - name: "gitlab-shell"
+      image: "rhmap45/gitlab-shell:2.1.2-11"
+    - name: "gitlab-httpd-proxy"
+      image: "rhmap45/httpd:2.4-41"
+  - name: "fh-ngui"
+    containers:
+    - name: "fh-ngui"
+      image: "rhmap45/fh-ngui:5.11.6-3"
+  - name: "ups"
+    containers:
+    - name: "ups"
+      image: "rhmap45/ups-eap:1.1.4-30"
+  - name: "fh-appstore"
+    containers:
+    - name: "fh-appstore"
+      image: "rhmap45/fh-appstore:2.0.3-17"
+  - name: "millicore"
+    containers:
+    - name: "millicore"
+      image: "rhmap45/millicore:7.49.1-5"
+    - name: "rhmap-proxy"
+      image: "rhmap45/httpd:2.4-42"
+    - name: "feedhenry-sdks"
+      image: "rhmap45/fh-sdks:1.0.0-32"
+  - name: "android-slave"
+    containers:
+    - name: "android-slave"
+      image: "docker.io/aerogear/digger-android-slave-image:FH-v4.5"
+  - name: "android-sdk"
+    containers:
+    - name: "android-sdk"
+      image: "docker.io/aerogear/android-sdk:FH-v4.5"

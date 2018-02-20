@@ -1,0 +1,147 @@
+---
+
+# Playbook which installs RHMAP Core RHMAP MbaaS and then creates the MBaaS target via the REST api
+
+# - name: "Prepare infrastructure for installation"
+#   hosts: core
+#   remote_user: root
+#   roles:
+#     - {role: preflight_checks, tags: preflight_checks}
+#   vars_files:
+#     - "../roles/preflight_checks/vars/poc.yml"
+
+# - name: "Check for and update to nodejs 6 for image-streams"
+#   hosts: master
+#   roles:
+#     - {role: image-streams, tags: preflight_checks}
+#   vars_files:
+#     - "../roles/preflight_checks/vars/poc.yml"
+
+- name: "Enable Docker to access container images of RHMAP components"
+  hosts: all
+  remote_user: root
+  roles:
+    - {role: rhmap-rpm, tags: rpm}
+
+- name: "Install RHMAP Core on Openshift (POC)"
+  hosts: master
+  roles:
+    - { role: deploy-core, project_name: "{{ core_project_name | default('rhmap-poc-core') }}", domain_name: "{{ core_project_name | default('rhmap-demo-core') }}", tags: deploy}
+  vars_files:
+    - "../roles/preflight_checks/vars/poc.yml"
+
+- name: "Install RHMAP MBaaS on Openshift (POC)"
+  hosts: master
+  roles:
+    - { role: deploy-mbaas, strict_mode: false, project_name: "{{ mbaas_project_name | default('rhmap-poc-mbaas') }}", tags: deploy}
+  vars_files:
+    - "../roles/preflight_checks/vars/poc.yml"
+
+
+- hosts: master
+  vars_files:
+    - "../roles/preflight_checks/vars/poc.yml"
+  tags: ['deploy']
+  tasks:
+
+    -
+      name: "Get domain info"
+      shell: oc env dc/millicore --list --all -n {{ core_project_name | default('rhmap-demo-core') }} | grep "CLUSTER_DOMAIN" | cut -d'=' -f2
+      register: output
+      changed_when: False
+
+    - set_fact:
+        domain: "{{ output.stdout }}"
+
+    - name: "Get admin user name"
+      shell: oc env dc/millicore --list --all -n {{ core_project_name | default('rhmap-demo-core') }} | grep "FH_ADMIN_USER_NAME" | cut -d'=' -f2
+      register: output
+      changed_when: False
+
+    - set_fact:
+        user: "{{ output.stdout }}"
+
+    - name: "Get admin user password"
+      shell: oc env dc/millicore --list --all -n {{ core_project_name | default('rhmap-demo-core') }} | grep "FH_ADMIN_USER_PASSWORD" | cut -d'=' -f2
+      register: output
+      changed_when: False
+
+    - set_fact:
+        password: "{{ output.stdout }}"
+
+    -
+      name: "Get the mbaas key"
+      shell: oc env dc/fh-mbaas --list --all -n {{ mbaas_project_name | default('rhmap-demo-mbaas') }} | grep "FHMBAAS_KEY" | cut -d'=' -f2
+      register: output
+      changed_when: False
+
+    - set_fact:
+        mbaas_key: "{{ output.stdout }}"
+
+
+    - debug:
+        msg: "URL to RHMAP studio is https://{{ core_project_name | default('rhmap-demo-core') }}.{{ domain }}"
+
+    - debug:
+        msg: "MBaaS service key is {{ mbaas_key }}"
+
+    - debug:
+        msg: "Studio user login is {{ user }}"
+
+    -
+      debug:
+        msg: "Studio password for {{user }} is {{ password }}"
+
+
+    -
+      name: "Authenticate to the RHMAP cluster"
+      uri:
+        url: "https://{{ core_project_name | default('rhmap-demo-core') }}.{{ domain }}/box/srv/1.1/act/sys/auth/login"
+        method: POST
+        body: '{"d":"{{ core_project_name | default("rhmap-demo-core") }}","u":"{{ user }}","p":"{{ password }}"}'
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        validate_certs: "{{ 'no' if skip_tls | default('false') | bool else 'yes' }}"
+      register: login
+      failed_when: login.json.responses.local.status != 'ok'
+
+    -
+      name: "Create the MBaaS target"
+      uri:
+        url: "https://{{ core_project_name | default('rhmap-demo-core') }}.{{ domain }}/api/v2/mbaases"
+        method: POST
+        body: '{"fhMbaasHost":"https://mbaas-{{ mbaas_project_name | default("rhmap-demo-mbaas") }}.{{ domain }}","type":"openshift3","_id":"{{ mbaas_target_id }}","label":"{{ mbaas_target_id }}","url":"{{ master_url }}","routerDNSUrl":"*.{{ domain }}","servicekey":" {{ mbaas_key }}"}'
+        headers:
+          Content-Type: "application/json"
+          Cookie: "feedhenry={{ login.json.login }}; csrf={{ login.json.csrf }};"
+          X-CSRF-Token: "{{ login.json.csrf }}"
+        body_format: json
+        validate_certs: "{{ 'no' if skip_tls | default('false') | bool else 'yes' }}"
+        status_code: 200,409
+      register: create
+
+    -
+      name: "Fetch OpenShift token"
+      command: oc whoami -t
+      register: os_token
+
+    -
+      name: "Create Environments"
+      uri:
+        url: "https://{{ core_project_name | default('rhmap-demo-core') }}.{{ domain }}/api/v2/environments"
+        method: POST
+        body: '{"id":"{{ item.id }}","label":"{{ item.label }}","target":"{{ mbaas_target_id }}","targetType":"openshift3","token":"{{ os_token.stdout }}"}'
+        headers:
+          Content-Type: "application/json"
+          Cookie: "feedhenry={{ login.json.login }}; csrf={{ login.json.csrf }};"
+          X-CSRF-Token: "{{ login.json.csrf }}"
+        body_format: json
+        validate_certs: no
+        status_code: 200,409,500
+        register: create_env
+        failed_when: create_env.stderr != '' and 'already exists' not in create_env.stderr
+      with_items:
+        - { id: 'dev', label: 'Development' }
+        - { id: 'test', label: 'Test' }
+        - { id: 'live', label: 'Live' }

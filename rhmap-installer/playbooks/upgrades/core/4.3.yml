@@ -1,0 +1,37 @@
+---
+
+-
+  name: 'Create config maps ** Ignore Errors from this task as some objects already exist**'
+  shell: 'oc new-app -f /opt/rhmap/4.3/templates/core/fh-core-backend.json --namespace {{ project_name }}'
+  register: output
+  ignore_errors: true
+
+-
+  name: 'Add required environment variables to nagios'
+  # migrate to new env var name using the previous value
+  shell: 'oc env dc/nagios RHMAP_ADMIN_EMAIL=$(oc env dc/nagios --list --namespace {{ project_name }} | grep ADMIN_EMAIL | sed -e "s/ADMIN_EMAIL=//") ADMIN_EMAIL-'
+
+-
+  name: 'Patch memcached resource limit'
+  shell: "oc patch dc memcached --type='json' -p='[{\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/resources/limits/memory\", \"value\":\"500M\"}]' --namespace {{ project_name }} && sleep 30;"
+
+-
+  name: 'Add required environment variables to backend modules from configmap'
+  shell: 'for i in fh-aaa fh-metrics fh-messaging fh-supercore gitlab-shell; do oc env dc/${i} --from=configmap/node-proxy --namespace {{ project_name }}; done'
+
+-
+  name: 'Add required environment to ups from config map *** PLEASE NOTE THIS WILL TAKE SOME TIME ***'
+  shell: 'oc env dc ups --from=configmap/ups-proxy --namespace {{ project_name }} && sleep 180;'
+
+-
+  name: 'Add required environment variables to fh-appstore'
+  shell: 'oc env dc/fh-appstore MILLICORE_HTTP_HOST=millicore MILLICORE_HTTP_PORT="8080" --from=configmap/node-proxy --namespace {{ project_name }}'
+
+-
+  name: 'Add required environment variables to fh-ngui from configmap'
+  shell: 'oc env dc/fh-ngui --from=configmap/node-proxy --namespace {{ project_name }}'
+
+-
+  name: 'Add required environment variables to millicore *** PLEASE NOTE THIS WILL TAKE SOME TIME ***'
+  shell: "oc env dc millicore --containers='millicore' EXTERNAL_HOST=\"\" HTTPD_PROXY_PORT=\"8010\" BUILDER_SERVICE_PROTOCOL=https HTTPD_SERVICE_NAME=rhmap-proxy --from=configmap/millicore-proxy --namespace {{ project_name }} && sleep 180;"
+

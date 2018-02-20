@@ -1,0 +1,17 @@
+---
+- name: "Create RHMAP Core PV Shares"
+  hosts: master
+  become: yes
+  vars:
+    pv_folder: "/root/RHMAP-PV/RHMAP"
+  tasks:
+  - name: "List all files in RHMAP PV folder"
+    command: chdir={{pv_folder}} ls
+    register: listed_files
+    ignore_errors: true
+  - name: "Create PV"
+    command: "oc create -f {{pv_folder}}/{{ item }}"
+    register: output
+    when: listed_files.stdout
+    with_items: "{{ listed_files.stdout_lines }}"
+    ignore_errors: true

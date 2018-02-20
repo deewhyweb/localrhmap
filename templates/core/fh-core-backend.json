@@ -1,0 +1,1947 @@
+{
+  "kind": "Template",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "fh-core-backend",
+    "creationTimestamp": null,
+    "annotations": {
+      "description": "Red Hat Mobile Application Platform - Core Backend template",
+      "iconClass": "icon-nodejs",
+      "templateVersion": "0.0.0"
+    }
+  },
+  "objects": [
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-aaa",
+        "creationTimestamp": null,
+        "labels": {
+          "name": "fh-aaa"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "protocol": "TCP",
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ],
+        "selector": {
+          "name": "fh-aaa"
+        },
+        "type": "ClusterIP",
+        "sessionAffinity": "None"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-aaa",
+        "creationTimestamp": null,
+        "labels": {
+          "name": "fh-aaa"
+        }
+      },
+      "spec": {
+        "strategy": {
+          "type": "Rolling",
+          "rollingParams": {
+            "updatePeriodSeconds": 1,
+            "intervalSeconds": 1,
+            "timeoutSeconds": 600,
+            "maxUnavailable": "25%",
+            "maxSurge": "25%"
+          },
+          "resources": {}
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": 1,
+        "test": false,
+        "selector": {
+          "name": "fh-aaa"
+        },
+        "template": {
+          "metadata": {
+            "creationTimestamp": null,
+            "labels": {
+              "name": "fh-aaa"
+            }
+          },
+          "spec": {
+            "volumes": [
+              {
+                "name": "node-proxy",
+                "configMap": {
+                  "name": "node-proxy"
+                }
+              }
+            ],
+            "containers": [
+              {
+                "name": "fh-aaa",
+                "image": "${FH_AAA_IMAGE}:${FH_AAA_IMAGE_VERSION}",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "protocol": "TCP"
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "FH_LOG_LEVEL",
+                    "value": "${FH_LOG_LEVEL}"
+                  },
+                  {
+                    "name": "MONGODB_USER",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongodb-keys",
+                        "key": "mongodb-fh-aaa-user"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongodb-keys",
+                        "key": "mongodb-fh-aaa-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MEMCACHED_SERVICE_NAME",
+                    "value": "${MEMCACHED_SERVICE_NAME}"
+                  },
+                  {
+                    "name": "MEMCACHED_SERVICE_PORT",
+                    "value": "${MEMCACHED_SERVICE_PORT}"
+                  },
+                  {
+                    "name": "MONGODB_SERVICE_NAME",
+                    "value": "${MONGODB_SERVICE_NAME}"
+                  },
+                  {
+                    "name": "MONGODB_SERVICE_PORT",
+                    "value": "${MONGODB_SERVICE_PORT}"
+                  },
+                  {
+                    "name": "HTTPS_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "https-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "HTTP_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "http-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "NO_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "no-proxy"
+                      }
+                    }
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "800m",
+                    "memory": "800Mi"
+                  },
+                  "requests": {
+                    "cpu": "20m",
+                    "memory": "100Mi"
+                  }
+                },
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 55,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "failureThreshold": 2
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "failureThreshold": 1
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30,
+            "dnsPolicy": "ClusterFirst",
+            "securityContext": {}
+          }
+        }
+      },
+      "status": {}
+    },
+    {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-messaging-keys",
+        "creationTimestamp": null
+      },
+      "data": {
+        "fh-messaging-api-key": "${FH_MESSAGING_API_KEY}"
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-messaging",
+        "creationTimestamp": null,
+        "labels": {
+          "name": "fh-messaging"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "protocol": "TCP",
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ],
+        "selector": {
+          "name": "fh-messaging"
+        },
+        "type": "ClusterIP",
+        "sessionAffinity": "None"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-messaging",
+        "creationTimestamp": null,
+        "labels": {
+          "name": "fh-messaging"
+        }
+      },
+      "spec": {
+        "strategy": {
+          "type": "Rolling",
+          "rollingParams": {
+            "updatePeriodSeconds": 1,
+            "intervalSeconds": 1,
+            "timeoutSeconds": 600,
+            "maxUnavailable": "25%",
+            "maxSurge": "25%"
+          },
+          "resources": {}
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": 1,
+        "test": false,
+        "selector": {
+          "name": "fh-messaging"
+        },
+        "template": {
+          "metadata": {
+            "creationTimestamp": null,
+            "labels": {
+              "name": "fh-messaging"
+            }
+          },
+          "spec": {
+            "volumes": [
+              {
+                "name": "node-proxy",
+                "configMap": {
+                  "name": "node-proxy"
+                }
+              }
+            ],
+            "containers": [
+              {
+                "name": "fh-messaging",
+                "image": "${FH_MESSAGING_IMAGE}:${FH_MESSAGING_IMAGE_VERSION}",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "protocol": "TCP"
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "FH_MESSAGING_CRON",
+                    "value": "10 07 * * *"
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_USER",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongodb-keys",
+                        "key": "mongodb-fh-reporting-user"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongodb-keys",
+                        "key": "mongodb-fh-reporting-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_DATABASE",
+                    "value": "fh-reporting"
+                  },
+                  {
+                    "name": "FH_MESSAGING_API_KEY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "fh-messaging-keys",
+                        "key": "fh-messaging-api-key"
+                      }
+                    }
+                  },
+                  {
+                    "name": "FH_LOG_LEVEL",
+                    "value": "${FH_DEFAULT_LOG_LEVEL}"
+                  },
+                  {
+                    "name": "MONGODB_REPLICA_NAME",
+                    "value": "${MONGODB_REPLICA_NAME}"
+                  },
+                  {
+                    "name": "HTTPS_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "https-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "HTTP_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "http-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "NO_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "no-proxy"
+                      }
+                    }
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "400m",
+                    "memory": "400Mi"
+                  },
+                  "requests": {
+                    "cpu": "200m",
+                    "memory": "200Mi"
+                  }
+                },
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 55,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "failureThreshold": 2
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "failureThreshold": 1
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30,
+            "dnsPolicy": "ClusterFirst",
+            "securityContext": {}
+          }
+        }
+      },
+      "status": {}
+    },
+    {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "node-proxy",
+        "creationTimestamp": null
+      },
+      "data": {
+        "http-proxy": "${PROXY_URL}",
+        "https-proxy": "${PROXY_URL}",
+        "no-proxy": "fh-ngui,fh-appstore,rhmap-proxy,millicore,fh-scm,fh-supercore,gitlab-shell,fh-messaging,fh-metrics,fh-aaa,ups,mysql,redis,memcached,nagios,mongodb-1"
+      }
+    },
+    {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "millicore-proxy",
+        "creationTimestamp": null
+      },
+      "data": {
+        "millicore-proxy": "${PROXY_HOST}",
+        "millicore-proxy-password": "${PROXY_PASS}",
+        "millicore-proxy-port": "${PROXY_PORT}",
+        "millicore-proxy-protocol": "https",
+        "millicore-proxy-user": "${PROXY_USER}",
+        "no-proxy": "fh-ngui,fh-appstore,rhmap-proxy,millicore,fh-scm,fh-supercore,gitlab-shell,fh-messaging,fh-metrics,fh-aaa,ups,mysql,redis,memcached,nagios,mongodb-1"
+      }
+    },
+    {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "ups-proxy",
+        "creationTimestamp": null
+      },
+      "data": {
+        "http-proxy-host": "${PROXY_HOST}",
+        "http-proxy-pass": "${PROXY_PASS}",
+        "http-proxy-port": "${PROXY_PORT}",
+        "http-proxy-user": "${PROXY_USER}",
+        "https-proxy-host": "${PROXY_HOST}",
+        "https-proxy-port": "${PROXY_PORT}",
+        "non-proxy-hosts": "fh-ngui|fh-appstore|rhmap-proxy|millicore|fh-scm|fh-supercore|gitlab-shell|fh-messaging|fh-metrics|fh-aaa|ups|mysql|redis|memcached|nagios|mongodb-1"
+      }
+    },
+    {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-metrics-keys",
+        "creationTimestamp": null
+      },
+      "data": {
+        "fh-metrics-api-key": "${FH_METRICS_API_KEY}"
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-metrics",
+        "creationTimestamp": null,
+        "labels": {
+          "name": "fh-metrics"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "protocol": "TCP",
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ],
+        "selector": {
+          "name": "fh-metrics"
+        },
+        "type": "ClusterIP",
+        "sessionAffinity": "None"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-metrics",
+        "creationTimestamp": null,
+        "labels": {
+          "name": "fh-metrics"
+        }
+      },
+      "spec": {
+        "strategy": {
+          "type": "Rolling",
+          "rollingParams": {
+            "updatePeriodSeconds": 1,
+            "intervalSeconds": 1,
+            "timeoutSeconds": 600,
+            "maxUnavailable": "25%",
+            "maxSurge": "25%"
+          },
+          "resources": {}
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": 1,
+        "test": false,
+        "selector": {
+          "name": "fh-metrics"
+        },
+        "template": {
+          "metadata": {
+            "creationTimestamp": null,
+            "labels": {
+              "name": "fh-metrics"
+            }
+          },
+          "spec": {
+            "volumes": [
+              {
+                "name": "node-proxy",
+                "configMap": {
+                  "name": "node-proxy"
+                }
+              }
+            ],
+            "containers": [
+              {
+                "name": "fh-metrics",
+                "image": "${FH_METRICS_IMAGE}:${FH_METRICS_IMAGE_VERSION}",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "protocol": "TCP"
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "FH_MBAASID",
+                    "value": "${FH_MBAASID}"
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongodb-keys",
+                        "key": "mongodb-fh-reporting-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_USER",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongodb-keys",
+                        "key": "mongodb-fh-reporting-user"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHREPORTING_DATABASE",
+                    "value": "fh-reporting"
+                  },
+                  {
+                    "name": "FH_METRICS_API_KEY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "fh-metrics-keys",
+                        "key": "fh-metrics-api-key"
+                      }
+                    }
+                  },
+                  {
+                    "name": "FH_LOG_LEVEL",
+                    "value": "${FH_DEFAULT_LOG_LEVEL}"
+                  },
+                  {
+                    "name": "MONGODB_REPLICA_NAME",
+                    "value": "${MONGODB_REPLICA_NAME}"
+                  },
+                  {
+                    "name": "HTTPS_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "https-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "HTTP_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "http-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "NO_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "no-proxy"
+                      }
+                    }
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "400m",
+                    "memory": "400Mi"
+                  },
+                  "requests": {
+                    "cpu": "200m",
+                    "memory": "200Mi"
+                  }
+                },
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 55,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "failureThreshold": 2
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "failureThreshold": 1
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30,
+            "dnsPolicy": "ClusterFirst",
+            "securityContext": {}
+          }
+        }
+      },
+      "status": {}
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "PersistentVolumeClaim",
+      "metadata": {
+        "name": "scm-data"
+      },
+      "spec": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "resources": {
+          "requests": {
+            "storage": "${FH_SCM_PVC_SIZE}"
+          }
+        }
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-scm",
+        "creationTimestamp": null,
+        "labels": {
+          "name": "fh-scm"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "protocol": "TCP",
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ],
+        "selector": {
+          "name": "fh-scm"
+        },
+        "type": "ClusterIP",
+        "sessionAffinity": "None"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-scm",
+        "creationTimestamp": null,
+        "labels": {
+          "name": "fh-scm"
+        }
+      },
+      "spec": {
+        "strategy": {
+          "type": "Rolling",
+          "rollingParams": {
+            "updatePeriodSeconds": 1,
+            "intervalSeconds": 1,
+            "timeoutSeconds": 600,
+            "maxUnavailable": "25%",
+            "maxSurge": "25%"
+          },
+          "resources": {}
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": 1,
+        "test": false,
+        "selector": {
+          "name": "fh-scm"
+        },
+        "template": {
+          "metadata": {
+            "creationTimestamp": null,
+            "labels": {
+              "name": "fh-scm"
+            }
+          },
+          "spec": {
+            "volumes": [
+              {
+                "name": "scm-data",
+                "persistentVolumeClaim": {
+                  "claimName": "scm-data"
+                }
+              },
+              {
+                "name": "node-proxy",
+                "configMap": {
+                  "name": "node-proxy"
+                }
+              }
+            ],
+            "containers": [
+              {
+                "name": "fh-scm",
+                "image": "${FH_SCM_IMAGE}:${FH_SCM_IMAGE_VERSION}",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "protocol": "TCP"
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "FH_LOG_LEVEL",
+                    "value": "${FH_LOG_LEVEL}"
+                  },
+                  {
+                    "name": "FH_SCM_FILE_SERVER_PATH",
+                    "value": "/opt/scm-data/fh-scm"
+                  },
+                  {
+                    "name": "FH_SCM_FILE_SERVER_BACKUP",
+                    "value": "/opt/scm-data/fh-scm/backup"
+                  },
+                  {
+                    "name": "FH_SCM_FILE_SERVER_KEY_STORE",
+                    "value": "/opt/scm-data/fh-scm/keystore"
+                  },
+                  {
+                    "name": "FH_MILLICORE_SERVICE_HOST",
+                    "value": "${FH_MILLICORE_SERVICE_HOST}"
+                  },
+                  {
+                    "name": "FH_MILLICORE_SERVICE_PORT",
+                    "value": "${FH_MILLICORE_SERVICE_PORT}"
+                  },
+                  {
+                    "name": "HTTPS_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "https-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "HTTP_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "http-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "NO_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "no-proxy"
+                      }
+                    }
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "800m",
+                    "memory": "800Mi"
+                  },
+                  "requests": {
+                    "cpu": "12m",
+                    "memory": "70Mi"
+                  }
+                },
+                "volumeMounts": [
+                  {
+                    "name": "scm-data",
+                    "mountPath": "/opt/scm-data"
+                  }
+                ],
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 55,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "failureThreshold": 2
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "failureThreshold": 1
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30,
+            "dnsPolicy": "ClusterFirst",
+            "securityContext": {}
+          }
+        }
+      },
+      "status": {}
+    },
+    {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "millicore-configuration",
+        "creationTimestamp": null
+      },
+      "data": {
+        "servicekeys.json": "{\"keys\":[{\"${FH_MILLICORE_SERVICE_KEY}\":{\"millicore\":{\"email\":\"supercore@example.com\",\"roles\":[\"sub\",\"admin\"]}}},{\"${GITLAB_MILLICORE_SERVICE_KEY}\":{\"millicore\":{\"email\":\"gitlab@example.com\",\"roles\":[\"sub\",\"admin\"]}}}]}"
+      }
+    },
+    {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "supercore-keys",
+        "creationTimestamp": null
+      },
+      "data": {
+        "millicore-api-key": "${FH_MILLICORE_API_KEY}",
+        "millicore-service-key": "${FH_MILLICORE_SERVICE_KEY}"
+      }
+    },
+    {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "platform-info",
+        "creationTimestamp": null
+      },
+      "data": {
+        "core-version": "4.5.3",
+        "platform-info.json": "{\"version\": \"4.5.3\",\"grid\": {\"id\": \"on-prem\",\"name\": \"On Premise\",\"region\": \" \"},\"site\": {\"id\": \"on-prem\"},\"env\": {\"id\": \"on-prem\",\"name\": \"On Premise\",\"size\": \" \",\"descr\": \" \"}}"
+      }
+    },
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-supercore",
+        "creationTimestamp": null,
+        "labels": {
+          "name": "fh-supercore"
+        }
+      },
+      "spec": {
+        "ports": [
+          {
+            "protocol": "TCP",
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ],
+        "selector": {
+          "name": "fh-supercore"
+        },
+        "type": "ClusterIP",
+        "sessionAffinity": "None"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "fh-supercore",
+        "creationTimestamp": null,
+        "labels": {
+          "name": "fh-supercore"
+        }
+      },
+      "spec": {
+        "strategy": {
+          "type": "Rolling",
+          "rollingParams": {
+            "updatePeriodSeconds": 1,
+            "intervalSeconds": 1,
+            "timeoutSeconds": 600,
+            "maxUnavailable": "25%",
+            "maxSurge": "25%"
+          },
+          "resources": {}
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": 1,
+        "test": false,
+        "selector": {
+          "name": "fh-supercore"
+        },
+        "template": {
+          "metadata": {
+            "creationTimestamp": null,
+            "labels": {
+              "name": "fh-supercore"
+            }
+          },
+          "spec": {
+            "volumes": [
+              {
+                "name": "platform-info",
+                "configMap": {
+                  "name": "platform-info"
+                }
+              },
+              {
+                "name": "node-proxy",
+                "configMap": {
+                  "name": "node-proxy"
+                }
+              }
+            ],
+            "containers": [
+              {
+                "name": "fh-supercore",
+                "image": "${FH_SUPERCORE_IMAGE}:${FH_SUPERCORE_IMAGE_VERSION}",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "protocol": "TCP"
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "CLOUD_APP_REDIS_IMAGE",
+                    "value": "${CLOUD_APP_REDIS_IMAGE}"
+                  },
+                  {
+                    "name": "CLOUD_APP_REDIS_IMAGE_VERSION",
+                    "value": "${CLOUD_APP_REDIS_IMAGE_VERSION}"
+                  },
+                  {
+                    "name": "FH_AAA_SERVICE_HOST",
+                    "value": "fh-aaa"
+                  },
+                  {
+                    "name": "FH_ES_LOGGING_ENABLED",
+                    "value": "false"
+                  },
+                  {
+                    "name": "FH_AAA_SERVICE_PORT",
+                    "value": "8080"
+                  },
+                  {
+                    "name": "FH_MILLICORE_SERVICE_HOST",
+                    "value": "http://millicore"
+                  },
+                  {
+                    "name": "FH_MILLICORE_SERVICE_PORT",
+                    "value": "8080"
+                  },
+                  {
+                    "name": "FH_SCM_SERVICE_HOST",
+                    "value": "fh-scm"
+                  },
+                  {
+                    "name": "MEMCACHED_SERVICE_HOST",
+                    "value": "memcached"
+                  },
+                  {
+                    "name": "FH_MESSAGING_SERVICE_HOST",
+                    "value": "fh-messaging"
+                  },
+                  {
+                    "name": "FH_MESSAGING_SERVICE_PORT",
+                    "value": "8080"
+                  },
+                  {
+                    "name": "FH_MESSAGING_API_KEY",
+                    "value": "${FH_MESSAGING_API_KEY}"
+                  },
+                  {
+                    "name": "FH_METRICS_SERVICE_HOST",
+                    "value": "fh-metrics"
+                  },
+                  {
+                    "name": "FH_METRICS_SERVICE_PORT",
+                    "value": "8080"
+                  },
+                  {
+                    "name": "FH_METRICS_API_KEY",
+                    "value": "${FH_METRICS_API_KEY}"
+                  },
+                  {
+                    "name": "FH_UPS_SERVICE_HOST",
+                    "value": "ups"
+                  },
+                  {
+                    "name": "FH_UPS_SERVICE_PORT",
+                    "value": "8080"
+                  },
+                  {
+                    "name": "FH_SCM_SERVICE_PORT",
+                    "value": "8080"
+                  },
+                  {
+                    "name": "FH_MILLICORE_SERVICE_KEY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "supercore-keys",
+                        "key": "millicore-service-key"
+                      }
+                    }
+                  },
+                  {
+                    "name": "FH_MILLICORE_API_KEY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "supercore-keys",
+                        "key": "millicore-api-key"
+                      }
+                    }
+                  },
+                  {
+                    "name": "FH_METRIC_COLLECTION_SCHEDULE",
+                    "value": "45 00 * * *"
+                  },
+                  {
+                    "name": "MONGODB_SERVICE_NAME",
+                    "value": "${MONGODB_SERVICE_NAME}"
+                  },
+                  {
+                    "name": "FH_LOG_LEVEL",
+                    "value": "${FH_LOG_LEVEL}"
+                  },
+                  {
+                    "name": "MONGODB_FHSUPERCORE_USER",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongodb-keys",
+                        "key": "mongodb-fh-supercore-user"
+                      }
+                    }
+                  },
+                  {
+                    "name": "MONGODB_FHSUPERCORE_PASSWORD",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "mongodb-keys",
+                        "key": "mongodb-fh-supercore-password"
+                      }
+                    }
+                  },
+                  {
+                    "name": "REDIS_PASSWORD",
+                    "value": "${REDIS_PASSWORD}"
+                  },
+                  {
+                    "name": "FH_MESSAGING_API_KEY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "fh-messaging-keys",
+                        "key": "fh-messaging-api-key"
+                      }
+                    }
+                  },
+                  {
+                    "name": "FH_METRICS_API_KEY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "fh-metrics-keys",
+                        "key": "fh-metrics-api-key"
+                      }
+                    }
+                  },
+                  {
+                    "name": "REDIS_SERVICE_NAME",
+                    "value": "${REDIS_SERVICE_NAME}"
+                  },
+                  {
+                    "name": "REDIS_SERVICE_PORT",
+                    "value": "6379"
+                  },
+                  {
+                    "name": "FH_NGUI_SERVICE_HOST",
+                    "value": "fh-ngui"
+                  },
+                  {
+                    "name": "FH_NGUI_SERVICE_PORT",
+                    "value": "8080"
+                  },
+                  {
+                    "name": "FH_APPSTORE_SERVICE_HOST",
+                    "value": "fh-appstore"
+                  },
+                  {
+                    "name": "FH_APPSTORE_SERVICE_PORT",
+                    "value": "8080"
+                  },
+                  {
+                    "name": "HTTPS_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "https-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "HTTP_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "http-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "NO_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "name": "node-proxy",
+                        "key": "no-proxy"
+                      }
+                    }
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "800m",
+                    "memory": "800Mi"
+                  },
+                  "requests": {
+                    "cpu": "20m",
+                    "memory": "200Mi"
+                  }
+                },
+                "volumeMounts": [
+                  {
+                    "name": "platform-info",
+                    "readOnly": true,
+                    "mountPath": "/etc/feedhenry/"
+                  }
+                ],
+                "livenessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "initialDelaySeconds": 55,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "failureThreshold": 2
+                },
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/sys/info/ping",
+                    "port": 8080,
+                    "scheme": "HTTP"
+                  },
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "failureThreshold": 1
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30,
+            "dnsPolicy": "ClusterFirst",
+            "securityContext": {}
+          }
+        }
+      },
+      "status": {}
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "labels": {
+          "name": "gitlab-shell"
+        },
+        "name": "gitlab-shell"
+      },
+      "spec": {
+        "ports": [
+          {
+            "name": "internal-ssh-port",
+            "port": 22,
+            "targetPort": 2022
+          },
+          {
+            "name": "server-http-port",
+            "port": "${HTTPD_GIT_PORT}"
+          }
+        ],
+        "selector": {
+          "name": "gitlab-shell"
+        }
+      }
+    },
+    {
+      "kind": "Route",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "git",
+        "creationTimestamp": null,
+        "labels": {
+          "app": "gitlab-shell"
+        }
+      },
+      "spec": {
+        "host": "${GIT_EXTERNAL_HOST}",
+        "to": {
+          "kind": "Service",
+          "name": "gitlab-shell"
+        },
+        "port": {
+          "targetPort": "server-http-port"
+        },
+        "tls": {
+          "termination": "edge",
+          "insecureEdgeTerminationPolicy": "Allow"
+        }
+      },
+      "status": {
+        "ingress": null
+      }
+    },
+    {
+      "kind": "ConfigMap",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "gitlab-shell",
+        "creationTimestamp": null
+      },
+      "data": {
+        "config.yml": "user: git\ngitlab_url: \"${GITLAB_MILLICORE_AUTH_URL}\"\nhttp_settings:\n  enabled: true\n  servicekey: ${GITLAB_MILLICORE_SERVICE_KEY}\n  url: \"http://${FH_MILLICORE_SERVICE_HOST}:${FH_MILLICORE_SERVICE_PORT}\"\n  self_signed_cert: false\nrepos_path: \"${GIT_REPO_MOUNT}${GIT_REPO_PATH}/repositories\"\nauth_file: \"/home/git/.ssh/authorized_keys\"\nredis:\n  bin: /home/git/gitlab-shell/bin/dummy-redis-cli\n  database: 0\n  socket: /var/run/redis/redis.sock\n  namespace: resque:gitlab\nlog_level: INFO\naudit_usernames: false\nrabbit:\n  enabled: false\n"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "PersistentVolumeClaim",
+      "metadata": {
+        "name": "git-data"
+      },
+      "spec": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "resources": {
+          "requests": {
+            "storage": "${GITLAB_SHELL_PVC_SIZE}"
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "DeploymentConfig",
+      "metadata": {
+        "labels": {
+          "name": "gitlab-shell"
+        },
+        "name": "gitlab-shell"
+      },
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "name": "gitlab-shell"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "name": "gitlab-shell"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "env": [
+                  {
+                    "name": "GIT_REPO_ROOT",
+                    "value": "${GIT_REPO_MOUNT}${GIT_REPO_PATH}"
+                  },
+                  {
+                    "name": "GIT_REPO_MOUNT",
+                    "value": "${GIT_REPO_MOUNT}"
+                  },
+                  {
+                    "name": "SSH_SECRETS_DIR",
+                    "value": "${SSH_SECRETS_DIR}"
+                  },
+                  {
+                    "name": "HTTPS_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "key": "https-proxy",
+                        "name": "node-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "HTTP_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "key": "http-proxy",
+                        "name": "node-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "NO_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "key": "no-proxy",
+                        "name": "node-proxy"
+                      }
+                    }
+                  }
+                ],
+                "image": "${GITLAB_SHELL_IMAGE}:${GITLAB_SHELL_IMAGE_VERSION}",
+                "imagePullPolicy": "IfNotPresent",
+                "livenessProbe": {
+                  "failureThreshold": 2,
+                  "initialDelaySeconds": 600,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "tcpSocket": {
+                    "port": 2022
+                  },
+                  "timeoutSeconds": 5
+                },
+                "name": "gitlab-shell",
+                "ports": [
+                  {
+                    "containerPort": 2022
+                  }
+                ],
+                "readinessProbe": {
+                  "failureThreshold": 2,
+                  "initialDelaySeconds": 2,
+                  "periodSeconds": 30,
+                  "successThreshold": 1,
+                  "tcpSocket": {
+                    "port": 2022
+                  },
+                  "timeoutSeconds": 5
+                },
+                "resources": {
+                  "limits": {
+                    "cpu": "800m",
+                    "memory": "800Mi"
+                  },
+                  "requests": {
+                    "cpu": "10m",
+                    "memory": "50Mi"
+                  }
+                },
+                "volumeMounts": [
+                  {
+                    "mountPath": "/home/git/gitlab-config",
+                    "name": "gitlab-shell-configmap"
+                  },
+                  {
+                    "mountPath": "${SSH_SECRETS_DIR}",
+                    "name": "git-ssh-keys-volume",
+                    "readOnly": true
+                  },
+                  {
+                    "mountPath": "${GIT_REPO_MOUNT}",
+                    "name": "git-data-volume"
+                  }
+                ]
+              },
+              {
+                "env": [
+                  {
+                    "name": "REPO_FOLDER_NAME",
+                    "value": "${GIT_REPO_PATH}/repositories"
+                  },
+                  {
+                    "name": "MILLICORE_HTTP_HOST",
+                    "value": "${MILLICORE_HTTP_HOST}"
+                  },
+                  {
+                    "name": "HTTP_REPO_ROOT",
+                    "value": "${HTTP_REPO_ROOT}"
+                  },
+                  {
+                    "name": "HTTPD_LOG_LEVEL",
+                    "value": "${HTTPD_LOG_LEVEL}"
+                  },
+                  {
+                    "name": "HTTPD_GIT_PORT",
+                    "value": "${HTTPD_GIT_PORT}"
+                  },
+                  {
+                    "name": "HTTPS_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "key": "https-proxy",
+                        "name": "node-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "HTTP_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "key": "http-proxy",
+                        "name": "node-proxy"
+                      }
+                    }
+                  },
+                  {
+                    "name": "NO_PROXY",
+                    "valueFrom": {
+                      "configMapKeyRef": {
+                        "key": "no-proxy",
+                        "name": "node-proxy"
+                      }
+                    }
+                  }
+                ],
+                "image": "${HTTPD_IMAGE}:${HTTPD_IMAGE_VERSION}",
+                "imagePullPolicy": "IfNotPresent",
+                "livenessProbe": {
+                  "failureThreshold": 2,
+                  "httpGet": {
+                    "path": "/health",
+                    "port": 8000
+                  },
+                  "initialDelaySeconds": 600,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "timeoutSeconds": 5
+                },
+                "name": "gitlab-httpd-proxy",
+                "ports": [
+                  {
+                    "containerPort": "${HTTPD_GIT_PORT}"
+                  }
+                ],
+                "readinessProbe": {
+                  "failureThreshold": 2,
+                  "httpGet": {
+                    "path": "/health",
+                    "port": 8000
+                  },
+                  "initialDelaySeconds": 10,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "timeoutSeconds": 5
+                },
+                "resources": {
+                  "limits": {
+                    "cpu": "800m",
+                    "memory": "800Mi"
+                  },
+                  "requests": {
+                    "cpu": "10m",
+                    "memory": "50Mi"
+                  }
+                },
+                "volumeMounts": [
+                  {
+                    "mountPath": "${HTTP_REPO_ROOT}",
+                    "name": "git-data-volume"
+                  }
+                ]
+              }
+            ],
+            "volumes": [
+              {
+                "configMap": {
+                  "name": "gitlab-shell"
+                },
+                "name": "gitlab-shell-configmap"
+              },
+              {
+                "name": "git-ssh-keys-volume",
+                "secret": {
+                  "secretName": "gitlab-ssh"
+                }
+              },
+              {
+                "name": "git-data-volume",
+                "persistentVolumeClaim": {
+                  "claimName": "git-data"
+                }
+              },
+              {
+                "configMap": {
+                  "name": "node-proxy"
+                },
+                "name": "node-proxy"
+              }
+            ]
+          }
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ]
+      }
+    }
+  ],
+  "parameters": [
+    {
+      "name": "FH_AAA_IMAGE",
+      "description": "The name of the fh-aaa image",
+      "value": "rhmap45/fh-aaa",
+      "required": true
+    },
+    {
+      "name": "FH_AAA_IMAGE_VERSION",
+      "description": "The version for the FH_AAA_IMAGE",
+      "value": "1.0.5-18",
+      "required": true
+    },
+    {
+      "name": "FH_LOG_LEVEL",
+      "description": "A default log level for all components",
+      "value": "info",
+      "required": true
+    },
+    {
+      "name": "MEMCACHED_SERVICE_NAME",
+      "description": "The memcached service name",
+      "value": "memcached",
+      "required": true
+    },
+    {
+      "name": "MEMCACHED_SERVICE_PORT",
+      "description": "The memcached service port",
+      "value": "11211",
+      "required": true
+    },
+    {
+      "name": "MONGODB_SERVICE_NAME",
+      "description": "The mongodb service name",
+      "value": "mongodb-1",
+      "required": true
+    },
+    {
+      "name": "MONGODB_SERVICE_PORT",
+      "description": "The mongodb service port",
+      "value": "27017",
+      "required": true
+    },
+    {
+      "name": "FH_MESSAGING_API_KEY",
+      "description": "Key for communicating with the FH_MESSAGING Service",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}",
+      "required": true
+    },
+    {
+      "name": "FH_MESSAGING_IMAGE",
+      "description": "The name of the fh-messaging image",
+      "value": "rhmap45/fh-messaging",
+      "required": true
+    },
+    {
+      "name": "FH_MESSAGING_IMAGE_VERSION",
+      "description": "The version for the FH_MESSAGING_IMAGE",
+      "value": "3.0.9-5",
+      "required": true
+    },
+    {
+      "name": "FH_DEFAULT_LOG_LEVEL",
+      "description": "A default log level for all MBaaS components",
+      "value": "info",
+      "required": true
+    },
+    {
+      "name": "MONGODB_REPLICA_NAME",
+      "description": "The mongodb replicaset name"
+    },
+    {
+      "name": "PROXY_URL",
+      "description": "Proxy URL"
+    },
+    {
+      "name": "PROXY_HOST",
+      "description": "Proxy hostname"
+    },
+    {
+      "name": "PROXY_PORT",
+      "description": "Proxy Port"
+    },
+    {
+      "name": "PROXY_USER",
+      "description": "Proxy username"
+    },
+    {
+      "name": "PROXY_PASS",
+      "description": "Proxy Password"
+    },
+    {
+      "name": "FH_MBAASID",
+      "description": "id of the mbaas generated.",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{20}"
+    },
+    {
+      "name": "FH_METRICS_IMAGE",
+      "description": "The name of the fh-metrics image",
+      "value": "rhmap45/fh-metrics",
+      "required": true
+    },
+    {
+      "name": "FH_METRICS_IMAGE_VERSION",
+      "description": "The version for the FH_METRICS_IMAGE",
+      "value": "3.0.7-6",
+      "required": true
+    },
+    {
+      "name": "FH_METRICS_API_KEY",
+      "description": "Key for communicating with the FH_METRICS Service",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}",
+      "required": true
+    },
+    {
+      "name": "FH_SCM_IMAGE",
+      "description": "The name of the fh-scm image",
+      "value": "rhmap45/fh-scm",
+      "required": true
+    },
+    {
+      "name": "FH_SCM_IMAGE_VERSION",
+      "description": "The version for the FH_SCM_IMAGE",
+      "value": "1.0.8-7",
+      "required": true
+    },
+    {
+      "name": "FH_SCM_PVC_SIZE",
+      "description": "The size of the volume for the fh-scm workspace where git repos are cloned for use by the Core",
+      "value": "32Gi"
+    },
+    {
+      "name": "FH_MILLICORE_SERVICE_HOST",
+      "description": "TODO: remove references to me once millicore is running on OpenShift",
+      "value": "millicore",
+      "required": true
+    },
+    {
+      "name": "FH_MILLICORE_SERVICE_PORT",
+      "description": "TODO: remove references to me once millicore is running on OpenShift",
+      "value": "8080",
+      "required": true
+    },
+    {
+      "name": "CLOUD_APP_REDIS_IMAGE",
+      "description": "The Redis docker image to use for cloud app deployments",
+      "value": "rhmap45/redis",
+      "required": true
+    },
+    {
+      "name": "CLOUD_APP_REDIS_IMAGE_VERSION",
+      "description": "The version of the Redis docker image to use for cloud app deployments",
+      "value": "2.8.21-36",
+      "required": true
+    },
+    {
+      "name": "FH_SUPERCORE_IMAGE",
+      "description": "The name of the fh-supercore image",
+      "value": "rhmap45/fh-supercore",
+      "required": true
+    },
+    {
+      "name": "FH_SUPERCORE_IMAGE_VERSION",
+      "description": "The version for the FH_SUPERCORE_IMAGE",
+      "value": "4.22.1-4",
+      "required": true
+    },
+    {
+      "name": "REDIS_PASSWORD",
+      "description": "The Redis password for fh-supercore",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}",
+      "required": true
+    },
+    {
+      "name": "GITLAB_MILLICORE_SERVICE_KEY",
+      "description": "Key for communicating with the millicore Service",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}",
+      "required": true
+    },
+    {
+      "name": "FH_MILLICORE_API_KEY",
+      "description": "Key for communicating with the millicore Service",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}",
+      "required": true
+    },
+    {
+      "name": "REDIS_SERVICE_NAME",
+      "description": "The redis service name",
+      "value": "redis",
+      "required": true
+    },
+    {
+      "name": "FH_MILLICORE_SERVICE_KEY",
+      "description": "Key for communicating with the millicore Service",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{40}",
+      "required": true
+    },
+    {
+      "name": "FH_AAA_SERVICE_HOST",
+      "value": "fh-aaa",
+      "required": true
+    },
+    {
+      "name": "FH_ES_LOGGING_ENABLED",
+      "description": "Boolean flag for whether centralised logging is enabled or not",
+      "value": "false",
+      "required": true
+    },
+    {
+      "name": "FH_ES_LOGGING_HOST",
+      "description": "The host for connecting to elasticsearch"
+    },
+    {
+      "name": "FH_ES_LOGGING_PORT",
+      "description": "The port for connecting to elasticsearch",
+      "value": "9200"
+    },
+    {
+      "name": "FH_ES_LOGGING_API_VERSION",
+      "description": "The elasticsearch API version.",
+      "value": "1.5"
+    },
+    {
+      "name": "FH_ES_LOGGING_KEY_PATH",
+      "description": "The path to the ssl key for making requests to elasticsearch.",
+      "value": "/etc/feedhenry/es-keys/key"
+    },
+    {
+      "name": "FH_ES_LOGGING_CERT_PATH",
+      "description": "The path to the ssl certificate for making requests to elasticsearch.",
+      "value": "/etc/feedhenry/es-keys/crt"
+    },
+    {
+      "name": "GITLAB_SHELL_IMAGE",
+      "description": "The name of the gitlab-shell image",
+      "value": "rhmap45/gitlab-shell",
+      "required": true
+    },
+    {
+      "name": "GITLAB_SHELL_IMAGE_VERSION",
+      "description": "The version for the GITLAB_SHELL_IMAGE",
+      "value": "2.1.2-11",
+      "required": true
+    },
+    {
+      "name": "GITLAB_SHELL_PVC_SIZE",
+      "description": "The size in bytes of the volume for repositories. Can be unadorned integers, or fixed-point integers with one of these SI suffices (E, P, T, G, M, K, m) or their power-of-two equivalents (Ei, Pi, Ti, Gi, Mi, Ki). For example, the following represent roughly the same value: 128974848, 129e6, 129M , 123Mi. Small quantities can be represented directly as decimals (e.g., 0.3), or using milli-units (e.g., 300m).",
+      "value": "10Gi",
+      "required": true
+    },
+    {
+      "name": "GITLAB_MILLICORE_AUTH_URL",
+      "description": "The URL that GitLab is exposed at",
+      "value": "http://millicore:8080/box/api/gls/",
+      "required": true
+    },
+    {
+      "name": "GIT_REPO_MOUNT",
+      "description": "Mounted path for git data persistent volume",
+      "value": "/home/git/data",
+      "required": true
+    },
+    {
+      "name": "GIT_REPO_PATH",
+      "description": "Path from GIT_REPO_MOUNT where repositories are stored",
+      "value": "/gls",
+      "required": true
+    },
+    {
+      "name": "SSH_SECRETS_DIR",
+      "description": "Mount path for ssh keys",
+      "value": "/etc/feedhenry/gitlab-shell",
+      "required": true
+    },
+    {
+      "name": "GIT_EXTERNAL_HOST",
+      "description": "External route to expose Git repositories from. If this is not set, the route will default to git-<project>.<router-subdomain> e.g. git-rhmap.openshift.example.com"
+    },
+    {
+      "name": "HTTPD_IMAGE",
+      "description": "The name of the httpd proxy image used to serve git repositories",
+      "value": "rhmap45/httpd",
+      "required": true
+    },
+    {
+      "name": "HTTPD_IMAGE_VERSION",
+      "description": "The version for the HTTPD_IMAGE",
+      "value": "2.4-42",
+      "required": true
+    },
+    {
+      "name": "MILLICORE_HTTP_HOST",
+      "description": "Internal hostname for millicore http service",
+      "value": "millicore:8080",
+      "required": true
+    },
+    {
+      "name": "HTTP_REPO_ROOT",
+      "description": "Git repository mount directory for apache httpd",
+      "value": "/srv",
+      "required": true
+    },
+    {
+      "name": "HTTPD_LOG_LEVEL",
+      "description": "Apache log level",
+      "value": "info",
+      "required": true
+    },
+    {
+      "name": "HTTPD_GIT_PORT",
+      "displayName": "Httpd git proxy port",
+      "description": "Httpd git proxy port",
+      "value": "8000",
+      "required": true
+    },
+    {
+      "name": "UPS_IMAGE",
+      "description": "The name of the Unified Push image",
+      "value": "rhmap45/ups-eap",
+      "required": true
+    },
+    {
+      "name": "UPS_IMAGE_VERSION",
+      "description": "The version for the UPS_IMAGE",
+      "value": "1.1.4-30",
+      "required": true
+    }
+  ]
+}

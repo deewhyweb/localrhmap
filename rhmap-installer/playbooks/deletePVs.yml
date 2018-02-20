@@ -1,0 +1,20 @@
+---
+- name: "Delete RHMAP PV Shares"
+  hosts: master
+  become: yes
+  vars:
+    pv_folder: "/root/RHMAP-PV/RHMAP"
+  tasks:
+  - name: "List all files in RHMAP PV folder"
+    command: chdir={{pv_folder}} ls
+    register: listed_files
+    ignore_errors: false
+  - name: "Delete PV"
+    vars:
+      tmpfile: "/Users/philiphayes/projects/mta/rhmapInstall/rhmap/RHMAP-PV/RHMAP/{{item}}"
+      tmpdata: "{{ lookup('file',tmpfile)|from_json }}"
+    command: " oc delete pv {{tmpdata.metadata.name}}"
+    register: output
+    when: listed_files.stdout
+    with_items: "{{ listed_files.stdout_lines }}"
+    ignore_errors: false

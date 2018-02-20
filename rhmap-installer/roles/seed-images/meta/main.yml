@@ -1,0 +1,4 @@
+---
+
+dependencies:
+  - { role: rhmap-rpm, tags: rpm }

@@ -1,0 +1,290 @@
+{
+  "kind": "Template",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "fh-core-monitoring",
+    "creationTimestamp": null,
+    "annotations": {
+      "description": "Red Hat Mobile Application Platform - Core Monitoring template",
+      "iconClass": "icon-nodejs",
+      "templateVersion": "0.0.0"
+    }
+  },
+  "objects": [
+    {
+      "kind": "Service",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nagios",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "ports": [
+          {
+            "protocol": "TCP",
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ],
+        "selector": {
+          "name": "nagios"
+        },
+        "type": "ClusterIP",
+        "sessionAffinity": "None"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
+    },
+    {
+      "kind": "Route",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nagios",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "host": "",
+        "to": {
+          "kind": "Service",
+          "name": "nagios"
+        },
+        "tls": {
+          "termination": "edge",
+          "insecureEdgeTerminationPolicy": "Allow"
+        }
+      },
+      "status": {
+        "ingress": null
+      }
+    },
+    {
+      "kind": "PersistentVolumeClaim",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nagios-claim-1",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "accessModes": [
+          "ReadWriteOnce"
+        ],
+        "resources": {
+          "requests": {
+            "storage": "1Gi"
+          }
+        }
+      },
+      "status": {
+        "phase": "Pending"
+      }
+    },
+    {
+      "kind": "DeploymentConfig",
+      "apiVersion": "v1",
+      "metadata": {
+        "name": "nagios",
+        "creationTimestamp": null
+      },
+      "spec": {
+        "strategy": {
+          "type": "Recreate",
+          "recreateParams": {
+            "timeoutSeconds": 600
+          },
+          "resources": {}
+        },
+        "triggers": [
+          {
+            "type": "ConfigChange"
+          }
+        ],
+        "replicas": 1,
+        "test": false,
+        "selector": {
+          "name": "nagios"
+        },
+        "template": {
+          "metadata": {
+            "creationTimestamp": null,
+            "labels": {
+              "name": "nagios"
+            }
+          },
+          "spec": {
+            "volumes": [
+              {
+                "name": "nagios-data-volume",
+                "persistentVolumeClaim": {
+                  "claimName": "nagios-claim-1"
+                }
+              }
+            ],
+            "containers": [
+              {
+                "name": "nagios",
+                "image": "${NAGIOS_IMAGE}:${NAGIOS_IMAGE_VERSION}",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "protocol": "TCP"
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "SMTP_SERVER",
+                    "value": "${SMTP_SERVER}"
+                  },
+                  {
+                    "name": "SMTP_USERNAME",
+                    "value": "${SMTP_USERNAME}"
+                  },
+                  {
+                    "name": "SMTP_PASSWORD",
+                    "value": "${SMTP_PASSWORD}"
+                  },
+                  {
+                    "name": "SMTP_TLS",
+                    "value": "${SMTP_TLS}"
+                  },
+                  {
+                    "name": "SMTP_FROM_ADDRESS",
+                    "value": "${SMTP_FROM_ADDRESS}"
+                  },
+                  {
+                    "name": "RHMAP_ADMIN_EMAIL",
+                    "value": "${RHMAP_ADMIN_EMAIL}"
+                  },
+                  {
+                    "name": "NAGIOS_USER",
+                    "value": "${NAGIOS_USER}"
+                  },
+                  {
+                    "name": "NAGIOS_PASSWORD",
+                    "value": "${NAGIOS_PASSWORD}"
+                  },
+                  {
+                    "name": "RHMAP_ROUTER_DNS",
+                    "value": "${RHMAP_ROUTER_DNS}"
+                  },
+                  {
+                    "name": "RHMAP_HOSTGROUPS",
+                    "value": "${RHMAP_HOSTGROUPS}"
+                  }
+                ],
+                "resources": {
+                  "limits": {
+                    "cpu": "800m",
+                    "memory": "800Mi"
+                  },
+                  "requests": {
+                    "cpu": "200m",
+                    "memory": "200Mi"
+                  }
+                },
+                "volumeMounts": [
+                  {
+                    "name": "nagios-data-volume",
+                    "mountPath": "/var/log/nagios"
+                  }
+                ],
+                "livenessProbe": {
+                  "tcpSocket": {
+                    "port": 8080
+                  },
+                  "initialDelaySeconds": 60,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 60,
+                  "successThreshold": 1,
+                  "failureThreshold": 3
+                },
+                "readinessProbe": {
+                  "tcpSocket": {
+                    "port": 8080
+                  },
+                  "initialDelaySeconds": 5,
+                  "timeoutSeconds": 5,
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "failureThreshold": 3
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "imagePullPolicy": "IfNotPresent"
+              }
+            ],
+            "restartPolicy": "Always",
+            "terminationGracePeriodSeconds": 30,
+            "dnsPolicy": "ClusterFirst",
+            "serviceAccountName": "nagios",
+            "serviceAccount": "nagios",
+            "securityContext": {}
+          }
+        }
+      },
+      "status": {}
+    }
+  ],
+  "parameters": [
+    {
+      "name": "SMTP_SERVER",
+      "description": "SMTP server address to use for sending alert emails e.g. 1.2.3.4:25",
+      "value": "localhost"
+    },
+    {
+      "name": "SMTP_USERNAME",
+      "description": "SMTP username",
+      "value": "username"
+    },
+    {
+      "name": "SMTP_PASSWORD",
+      "description": "SMTP password",
+      "value": "password"
+    },
+    {
+      "name": "SMTP_TLS",
+      "description": "Use TLS for message delivery (auto|yes|no)",
+      "value": "auto"
+    },
+    {
+      "name": "SMTP_FROM_ADDRESS",
+      "description": "From email address for alerts",
+      "value": "admin@example.com"
+    },
+    {
+      "name": "RHMAP_ADMIN_EMAIL",
+      "description": "To email address for alerts",
+      "value": "root@localhost"
+    },
+    {
+      "name": "NAGIOS_USER",
+      "description": "Nagios admin username",
+      "value": "nagiosadmin"
+    },
+    {
+      "name": "NAGIOS_PASSWORD",
+      "description": "Nagios admin user password",
+      "generate": "expression",
+      "from": "[a-zA-Z0-9]{10}"
+    },
+    {
+      "name": "RHMAP_ROUTER_DNS",
+      "description": "Host or Service name for RHMAP",
+      "value": "localhost"
+    },
+    {
+      "name": "RHMAP_HOSTGROUPS",
+      "description": "RHMAP hostgroups being monitored (core|mbaas|core,mbaas)",
+      "value": "core"
+    },
+    {
+      "name": "NAGIOS_IMAGE",
+      "description": "The name of the Nagios Docker image",
+      "value": "rhmap45/nagios"
+    },
+    {
+      "name": "NAGIOS_IMAGE_VERSION",
+      "description": "The version of the Nagios Docker image",
+      "value": "4.0.8-53"
+    }
+  ]
+}

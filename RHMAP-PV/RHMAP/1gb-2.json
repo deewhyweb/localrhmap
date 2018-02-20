@@ -1,0 +1,21 @@
+{
+ "apiVersion": "v1",
+ "kind": "PersistentVolume",
+ "metadata": {
+ "name": "1gb-2",
+ "labels": {
+   "application": "pv-test"
+ }
+},
+"spec": {
+   "capacity": {
+   "storage": "1Gi"
+   },
+   "accessModes": [ "ReadWriteOnce" ],
+   "nfs": {
+      "path": "/Users/philiphayes/testnfs/1gb2",
+      "server": "192.168.56.1"
+   },
+   "persistentVolumeReclaimPolicy": "Recycle"
+   }
+}

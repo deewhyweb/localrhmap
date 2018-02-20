@@ -1,0 +1,19 @@
+---
+
+  -
+    name: Get build farm env BASH
+    shell: "source ~/.bash_profile && echo $BASH"
+    register: buildfarm_env_bash
+    changed_when: False
+
+  -
+    name: Get build farm env PATH
+    shell: "source ~/.bash_profile && echo $PATH:/usr/local/bin:/usr/local/sbin"
+    register: buildfarm_env_path
+    changed_when: False
+
+  -
+    name: Get build farm env LANG
+    shell: "source ~/.bash_profile && echo $LANG"
+    register: buildfarm_env_lang
+    changed_when: False

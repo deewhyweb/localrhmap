@@ -1,0 +1,7 @@
+---
+
+- name: "Configure Non Wildcard Proxy for RHMAP Core"
+  hosts: master
+  remote_user: root
+  roles:
+    - non-wildcard-proxy

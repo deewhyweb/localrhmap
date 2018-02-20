@@ -1,0 +1,212 @@
+---
+
+-
+  name: "Include release specific image versions"
+  include_vars: ../shared_files/{{ rhmap_version }}.yml
+
+-
+  block:
+
+    -
+      name: "Check for 100Gi Persistent Volume"
+      shell: oc get pv --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }} | awk '/Available/ && /100Gi/'
+      register: hundred_output
+      become: true
+      failed_when: hundred_output.stdout_lines | length < required_100_pv | default(0) | int
+      changed_when: False
+
+
+    -
+      set_fact:
+        valid_pvs: "{{ (hundred_output.stdout_lines | length - required_100_pv | default(0) ) | int }}"
+    
+    -
+      name: "Check for 65Gi Persistent Volume"
+      shell: oc get pv --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }} | awk '/Available/ && /65Gi/'
+      register: sixtyfive_output
+      become: true
+      failed_when: sixtyfive_output.stdout_lines | length < required_65_pv | default(0) | int
+      changed_when: False
+
+
+    -
+      set_fact:
+        valid_pvs: "{{ (sixtyfive_output.stdout_lines | length - required_65_pv | default(0) ) | int }}"
+
+    -
+      name: "Check for 50Gi Persistent Volume"
+      shell: oc get pv --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }} | awk '/Available/ && /50Gi/'
+      register: fifty_output
+      become: true
+      failed_when: fifty_output.stdout_lines | length  <  required_50_pv | int  and  required_50_pv | int  >  valid_pvs | int
+      changed_when: False
+
+    -
+      set_fact:
+        valid_pvs: "{{ (fifty_output.stdout_lines | length + valid_pvs | int - required_50_pv) | int }}"
+
+    -
+      name: "Check for 40Gi Persistent Volume"
+      shell: oc get pv --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }} | awk '/Available/ && /40Gi/'
+      register: forty_output
+      become: true
+      failed_when: forty_output.stdout_lines | length  <  required_40_pv | default(0) | int  and  required_40_pv | default(0) | int  >  valid_pvs | int
+      changed_when: False
+
+    -
+      set_fact:
+        valid_pvs: "{{ (forty_output.stdout_lines | length + valid_pvs | int - required_40_pv | default(0)) | int }}"
+
+    -
+      name: "Check for 32Gi Persistent Volume"
+      shell: oc get pv --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }} | awk '/Available/ && /32Gi/'
+      register: thirtytwo_output
+      become: true
+      failed_when: thirtytwo_output.stdout_lines | length  <  required_32_pv | default(0) | int  and  required_32_pv | default(0) | int  >  valid_pvs | int
+      changed_when: False
+
+    -
+      set_fact:
+        valid_pvs: "{{ (thirtytwo_output.stdout_lines | length + valid_pvs | int - required_32_pv | default(0)) | int }}"
+
+    -
+      name: "Check for 25Gi Persistent Volume"
+      shell: oc get pv --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }} | awk '/Available/ && /25Gi/'
+      register: twenty_five_output
+      become: true
+      failed_when: twenty_five_output.stdout_lines | length  <  required_25_pv | int  and  required_25_pv | int  >  valid_pvs | int
+      changed_when: False
+
+    -
+      set_fact:
+        valid_pvs: "{{ (twenty_five_output.stdout_lines | length + valid_pvs | int - required_25_pv | default(0)) | int }}"
+
+
+    -
+      name: "Check for 10Gi Persistent Volume"
+      shell: oc get pv --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }} | awk '/Available/ && /10Gi/'
+      register: ten_ouput
+      become: true
+      failed_when: ten_ouput.stdout_lines | length  <  required_10_pv | default(0) | int  and  required_10_pv | default(0) | int  >  valid_pvs | int
+      changed_when: False
+
+    -
+      set_fact:
+        valid_pvs: "{{ (ten_ouput.stdout_lines | length + valid_pvs | int - required_10_pv | default(0)) | int }}"
+
+
+    -
+      name: "Check for 5Gi Persistent Volume"
+      shell: oc get pv --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }} | awk '/Available/ && /5Gi/'
+      register: five_output
+      become: true
+      failed_when: five_output.stdout_lines | length  <  required_5_pv | int  and  required_5_pv | int  >  valid_pvs | int
+      changed_when: False
+
+    -
+      set_fact:
+        valid_pvs: "{{ (five_output.stdout_lines | length + valid_pvs | int - required_5_pv) | int }}"
+
+    -
+      name: "Check for 1Gi Persistent Volume"
+      shell: oc get pv  --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }} | awk '/Available/ && /1Gi/'
+      register: one_output
+      become: true
+      failed_when: one_output.stdout_lines | length  <  required_1_pv | int  and  required_1_pv | int  >  valid_pvs | int
+      changed_when: False
+
+
+  rescue:
+
+    -
+      pause:
+        prompt: "The minimum specifications for Persistent Volumes has not been met. Are you sure you would like to proceed with the installation?"
+      when:
+        - not strict_mode|bool
+-
+  block:
+
+    -
+      name: "Check if project MySQL PV test project exists"
+      command: "oc get project rhmap-pv-test"
+      register: project_output
+      failed_when: false
+
+    -
+      name: "Delete MySQL PV test project if it already exists"
+      command: "oc delete project rhmap-pv-test"
+      register: output
+      when: project_output.rc == 0
+      failed_when: output.stderr != '' and 'not found' not in output.stderr
+
+    -
+      name: "Create new project for MySQL PV test"
+      command: "oc new-project rhmap-pv-test"
+      register: output
+      retries: 5
+      delay: 10
+      until: output.rc == 0
+
+    -
+      name: "Read mysql definition"
+      set_fact:
+        mysql_image_def: "{{ deployments | selectattr('name', 'match', '^mysql$') | map(attribute='containers') | list }}"
+    -
+      name: "Get image version"
+      set_fact:
+        mysql_image: "{{ mysql_image_def[0][0].image }}"
+
+    -
+      name: "Deploy MySQL to test the PV using Gluster"
+      shell: "echo {{ lookup( 'file', '../shared_files/pvtest.json' ) | quote }} | \
+               oc new-app -p MYSQL_IMAGE={{ mysql_image }} -p GLUSTER_METADATA_NAME={{ gluster_metadata_name | default('test') }} \
+                -p GLUSTER_EP_IP={{ gluster_endpoints[0] }} -f -"
+      changed_when: True
+      register: done
+      when:
+        - gluster_storage is defined
+        - gluster_storage | bool
+        - gluster_metadata_name is defined
+        - gluster_endpoints is defined
+        - gluster_endpoints|length > 0
+
+    -
+      name: "Deploy MySQL to test the PV"
+      shell: "echo {{ lookup( 'file', '../shared_files/pvtest.json' ) | quote }} | oc new-app -p MYSQL_IMAGE={{ mysql_image }} -f -"
+      when: not done|changed
+
+    -
+      name: Verifying PV test app is successfully deployed
+      shell: oc get pods --namespace rhmap-pv-test | grep deploy
+      register: result
+      until: not result.stdout
+      retries: 10
+      delay: 30
+      failed_when: result.stdout
+
+    -
+      name: Verifying PV test app is running
+      shell: oc get pods  --namespace rhmap-pv-test | awk 'NR > 1 {print $3}'
+      register: result
+      until: result.stdout == "Running"
+      retries: 10
+      delay: 30
+
+    -
+      name: "Delete the PV test project"
+      command: "oc delete project rhmap-pv-test"
+
+  when:
+    - strict_mode is undefined or strict_mode | bool
+  rescue:
+
+    -
+      name: Pause in case the PV test failed
+      pause:
+        prompt: >
+          The test of Persistent Volumes (write/read test) did not pass.
+          It may be caused by incorrect configuration of the Persistent Volumes.
+          For more information about the troubleshooting with NFS and Persistent Volumes
+          check the RHMAP documentation
+          https://access.redhat.com/documentation/en-us/red_hat_mobile_application_platform/4.3/html/troubleshooting_guide/troubleshooting-nfs-issues
+

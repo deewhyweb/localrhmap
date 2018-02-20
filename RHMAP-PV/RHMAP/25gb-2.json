@@ -1,0 +1,21 @@
+{
+ "apiVersion": "v1",
+ "kind": "PersistentVolume",
+ "metadata": {
+ "name": "25gb-2",
+ "labels": {
+   "application": "Mongo-db"
+ }
+},
+"spec": {
+   "capacity": {
+   "storage": "25Gi"
+   },
+   "accessModes": [ "ReadWriteOnce" ],
+   "nfs": {
+      "path": "/Users/philiphayes/testnfs/mongoDb",
+      "server": "192.168.56.1"
+   },
+   "persistentVolumeReclaimPolicy": "Recycle"
+   }
+}

@@ -1,0 +1,28 @@
+---
+
+-
+  name: "Check for presence of OpenShift command line tool"
+  register: output
+  shell: oc
+  args:
+    executable: /bin/bash
+  failed_when: output.stderr and 'command not found' in output.stderr
+  changed_when: False
+
+-
+  name: "Authenticate with oauth token"
+  command: 'oc login --server={{ login_url | default("https://localhost:8443") }} --token={{ oc_oauth_token }} {{ skip_tls | default("false") | bool | ternary("--insecure-skip-tls-verify"," ") }}'
+  register: oauth_login_status
+  when:
+    - oc_oauth_token is defined
+    - oc_oauth_token != ""
+
+-
+  name: "Authenticate as user with credentials"
+  command: 'oc login {{ login_url | default("https://localhost:8443") }} --username={{ oc_user }} --password="{{ oc_password }}" {{ skip_tls | default("false") | bool | ternary("--insecure-skip-tls-verify"," ") }}'
+  when:
+    - oauth_login_status|skipped
+    - oc_user is defined
+    - oc_user != ""
+    - oc_password is defined
+    - oc_password != ""

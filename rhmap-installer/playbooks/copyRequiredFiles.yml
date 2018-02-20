@@ -1,0 +1,17 @@
+---
+- name: "Copy Required Master Files"
+  hosts: master
+  remote_user: rhc
+  vars:
+  root_folder: "/Users/philiphayes/projects/mta/localrhmap"
+  tasks:
+  - name: "Copy Templates"
+    copy:
+      src: "{{root_folder}}/templates"
+      dest: /root
+      mode: 0755
+  - name: "Copy PV Definitions"
+    copy:
+      src: "{{root_folder}}/RHMAP-PV"
+      dest: /root
+      mode: 0755

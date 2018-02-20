@@ -1,0 +1,124 @@
+---
+
+-
+  name: "Get gitlab-shell pod name"
+  command: bash -c "oc get pods | grep gitlab-shell | grep -v 'deploy' | grep 'Running' | awk '{print $1}'"
+  register: gitlab_pod
+
+-
+  name: "Get fh-scm pod name"
+  command: bash -c "oc get pods | grep fh-scm | grep -v 'deploy' | grep 'Running' | awk '{print $1}'"
+  register: fh_scm_pod
+
+-
+  name: "Get current UID of gitlab-shell pod"
+  command: bash -c "oc rsh {{gitlab_pod.stdout}} id 2>1 | grep uid | awk '{print $1}' | cut -f2 -d= | cut -f1 -d'('"
+  register: gitlab_uid
+
+-
+  name: "Get current UID of fh-scm pod"
+  command: bash -c "oc rsh {{fh_scm_pod.stdout}} id 2>1 | grep uid | awk '{print $1}' | cut -f2 -d= | cut -f1 -d'('"
+  register: fh_scm_uid
+  
+-
+  name: "Determine the valid UID SCC range for the existing project"
+  command: oc get project "{{ project_name }}" --template {% raw %}'{{ index .metadata.annotations "openshift.io/sa.scc.uid-range" }}'{% endraw %}
+  register: result
+
+-
+  name: "Parse output from previous task"
+  shell: "echo {{ result.stdout }} | cut -d'/' -f1"
+  register: uid_in_range
+
+-
+  name: "DEBUG UID to use"
+  debug: var=uid_in_range.stdout
+
+-
+  block:
+    -
+      name: Check the presence of Gitlab migration template
+      stat:
+        path: "{{ core_templates_dir | default('/opt/rhmap/4.4/templates/core') }}/gitlab-migrate.json"
+      register: file_result
+      failed_when:
+        - file_result.stat.exists == false
+
+    -
+      name: "Deploy the gitlab-shell migration pod"
+      command: "oc new-app -f {{ core_templates_dir | default('/opt/rhmap/4.4/templates/core') }}/gitlab-migrate.json -p NAMESPACE_UID={{ uid_in_range.stdout }} --namespace {{ project_name }}"
+      register: migrate_output
+      failed_when: uid_in_range.stdout is undefined or uid_in_range.stdout == ''
+
+    -
+      name: "DEBUG Output"
+      debug: var=migrate_output.stdout
+
+    -
+      name: "Ensure the migration completed successfully"
+      command: "oc logs gitlab-migrate --namespace {{ project_name }}"
+      register: output
+      until: output.stdout.find("successful") != -1
+      retries: "{{ retry_limit }}"
+      delay: 5
+
+    -
+      name: "DEBUG Output"
+      debug: var=output.stdout
+
+    -
+      name: "Kill the gitlab-shell migration pod"
+      command: "oc delete pod gitlab-migrate  --namespace  {{ project_name }} "
+  when:
+    - gitlab_uid.stdout == "0" or fh_scm_uid.stdout == "1001"
+
+# This is a once off change. We moved some of our existing images running as root, on port 22 to non root. Therefore we need to user higher ports.
+# We read the default user from the OpenShift namespace and allow them ownership of the files from here on out
+
+-
+  name: "Get the correct port for gitlab-shell service"
+  command: oc get svc gitlab-shell --template {% raw %}"{{(index .spec.ports 0).port }}"{% endraw %} --namespace {{ project_name }}
+  register: port
+
+-
+  name: "Patch the gitlab-shell service port at index 0"
+  shell: "oc patch svc gitlab-shell --type='json' \
+          -p='[{ \"op\": \"replace\", \"path\": \"/spec/ports/0/targetPort\",\"value\":2022 }]' --namespace {{ project_name }}"
+  when: port.stdout == "22"
+
+-
+  name: "Patch the gitlab-shell service port at index 1"
+  shell: "oc patch svc gitlab-shell --type='json' \
+          -p='[{ \"op\": \"replace\", \"path\": \"/spec/ports/1/targetPort\",\"value\":2022 }]' --namespace {{ project_name }}"
+  when: port.stdout == "8000"
+
+-
+  name: "Patch the gitlab-shell image, ports and user"
+  shell: "oc patch dc gitlab-shell --type='json' \
+          -p='[ {\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/ports/0/containerPort\",\"value\":2022 }, \
+                {\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/livenessProbe/tcpSocket/port\",\"value\":2022 }, \
+                {\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/readinessProbe/tcpSocket/port\",\"value\":2022 }, \
+                {\"op\": \"replace\", \"path\": \"/spec/template/spec/securityContext/runAsUser\",\"value\":\"{{ uid_in_range.stdout }}\" } ]' --namespace {{ project_name }}"
+
+-
+  name: "Pause gitlab redeploy"
+  command: oc deploy gitlab-shell --cancel --namespace {{ project_name }}
+
+-
+  name: "Patch the fh-scm image and user "
+  shell: "oc patch dc fh-scm --type='json' \
+          -p='[ {\"op\": \"replace\", \"path\": \"/spec/template/spec/securityContext/runAsUser\",\"value\":\"{{ uid_in_range.stdout }}\" } ]' --namespace {{ project_name }}"
+
+-
+  name: "Pause fh-scm redeploy"
+  command: oc deploy fh-scm --cancel --namespace {{ project_name }}
+
+-
+  name: "Patch the rhmap-proxy image and user "
+  shell: "oc patch dc millicore --type='json' \
+          -p='[ {\"op\": \"replace\", \"path\": \"/spec/template/spec/securityContext/runAsUser\",\"value\":\"{{ uid_in_range.stdout }}\" } ]' --namespace {{ project_name }}"
+
+-
+  name: "Pause millicore redeploy"
+  command: oc deploy millicore --cancel --namespace {{ project_name }}
+

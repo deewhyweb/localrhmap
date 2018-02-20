@@ -1,0 +1,11 @@
+---
+
+-
+  name: "Remove plugins from host"
+  file:
+    state: absent
+    dest: "{{ item.dest }}"
+  listen: remove plugins
+  when: item|changed
+  with_items: "{{ fetched_plugins.results | default([]) }}"
+

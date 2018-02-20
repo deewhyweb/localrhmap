@@ -1,0 +1,21 @@
+{
+ "apiVersion": "v1",
+ "kind": "PersistentVolume",
+ "metadata": {
+ "name": "10gb-2",
+ "labels": {
+   "application": "Metrics-data"
+ }
+},
+"spec": {
+   "capacity": {
+   "storage": "10Gi"
+   },
+   "accessModes": [ "ReadWriteOnce" ],
+   "nfs": {
+      "path": "/Users/philiphayes/testnfs/metricsData",
+      "server": "192.168.56.1"
+   },
+   "persistentVolumeReclaimPolicy": "Recycle"
+   }
+}

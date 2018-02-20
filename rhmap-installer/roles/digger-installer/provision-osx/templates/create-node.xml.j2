@@ -1,0 +1,47 @@
+<slave>
+  <name>{{ buildfarm_node_name }} ({{mac_host}})</name>
+  <description>{{ buildfarm_node_description }}</description>
+  <remoteFS>{{ buildfarm_node_root_dir }}</remoteFS>
+  <numExecutors>{{ buildfarm_node_executors }}</numExecutors>
+  <mode>{{ buildfarm_node_mode }}</mode>
+  <retentionStrategy class="hudson.slaves.RetentionStrategy$Always"/>
+  <launcher class="hudson.plugins.sshslaves.SSHLauncher" plugin="ssh-slaves@1.20">
+    <host>{{ mac_host }}</host>
+    <port>{{ buildfarm_node_port }}</port>
+    <credentialsId>{{ buildfarm_credential_id }}</credentialsId>
+    <sshHostKeyVerificationStrategy class="hudson.plugins.sshslaves.verifiers.NonVerifyingKeyVerificationStrategy"/>
+  </launcher>
+  <label>{{ buildfarm_node_labels | join(' ') }}</label>
+    <nodeProperties>
+      <hudson.slaves.EnvironmentVariablesNodeProperty>
+        <envVars serialization="custom">
+          <unserializable-parents/>
+          <tree-map>
+            <default>
+              <comparator class="hudson.util.CaseInsensitiveComparator"/>
+            </default>
+            {% if proxy_url is defined and proxy_url != '' %}
+            <int>6</int>
+            {% else %}
+            <int>4</int>
+            {% endif %}
+            <string>BASH</string>
+            <string>{{ buildfarm_env_bash.stdout }}</string>
+            <string>CI</string>
+            <string>Y</string>
+            <string>PATH</string>
+            <string>{{ buildfarm_env_path.stdout }}</string>
+            <string>LANG</string>
+            <string>{{ buildfarm_env_lang.stdout }}</string>
+            {% if proxy_url is defined and proxy_url != '' %}
+            <string>HTTP_PROXY</string>
+            <string>{{ proxy_url }}</string>
+            <string>HTTPS_PROXY</string>
+            <string>{{ proxy_url }}</string>
+            {% endif %}
+          </tree-map>
+        </envVars>
+      </hudson.slaves.EnvironmentVariablesNodeProperty>
+    </nodeProperties>
+  <userId>{{ buildfarm_user_id }}</userId>
+</slave>

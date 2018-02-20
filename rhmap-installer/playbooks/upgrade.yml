@@ -1,0 +1,157 @@
+---
+# The upgrade flow is as follows :
+# 1. Check the current version by reading the platform-info configmap via oc client for the current type (core or mbaas)
+# 2. With the 'current_version' variable get the actual 'release_version' from the shared_files/{{ current_version }}.yml
+# 3. Compare the 'release_version' with the configmap version to check if a patch upgrade is needed
+# 4. If yes set the appropriate variables and continue with the patch upgrade
+# 5. If no then set the appropriate variables and contineu with minor upgrade
+
+-
+  name: "Check existing version of current RHMAP project"
+  hosts: master
+  roles:
+    - {role: login, updating: true}
+  tasks:
+
+    -
+      name: Get the existing version of the installed Core
+      shell: "oc get configmap platform-info -o yaml  --namespace {{ project_name }} | grep core-version | awk '{print $2}'"
+      register:  core_version
+      when: project_type == 'core'
+
+    -
+      name: Store existing version
+      set_fact:
+        current_version: "{{ core_version.stdout[:3] }}"
+        current_patch_version: "{{ core_version.stdout[2:5] }}"
+        current_full_version: "{{ core_version.stdout }}"
+      when: core_version|changed
+
+    -
+      name: Get the existing version of the installed MBaaS
+      shell: "oc get configmap fh-mbaas-info -o yaml  --namespace {{ project_name }} | grep version | awk '{print $2}'"
+      register:  mbaas_version
+      when: (project_type == '1-node-mbaas') or (project_type == '3-node-mbaas')
+
+    -
+      name: Store existing version
+      set_fact:
+        current_version: "{{ mbaas_version.stdout[:3] }}"
+        current_patch_version: "{{ mbaas_version.stdout[2:5] }}"
+        current_full_version: "{{ mbaas_version.stdout }}"
+      when: mbaas_version|changed
+
+    -
+      name: Retrieve version specific docker image numbers
+      include_vars: ../shared_files/{{ current_version }}.yml
+
+    -
+      name: Check patch and release version
+      set_fact:
+        productised_version: "{{ release_version[:3] }}"
+        productised_patch_version: "{{ release_version[2:5] }}"
+
+    -
+      name: Set upgrade type to patch
+      set_fact:
+        upgrade_to_version: "{{ current_version }}"
+        upgrade_type: patch
+        finish_version: "{{ release_version }}"
+      when:
+         - current_patch_version | float < productised_patch_version | float
+
+    -
+      name: Set upgrade type to release
+      set_fact:
+        upgrade_to_version: "{{ current_version | float + 0.1 }}"
+        current_full_version: "{{ current_version }}"
+        upgrade_type: release
+        finish_version: "{{ current_version | float + 0.1 }}"
+      when:
+        - current_patch_version | float == productised_patch_version | float
+        - current_version | float < productised_version | float + 0.1
+
+    - pause:
+        prompt: |
+
+          The current version number for RHMAP {{ project_type }} is {{ current_full_version }}
+
+          This upgrade will attempt to move to the latest {{ upgrade_type }} version {{ finish_version }}
+
+          [N.B.] Please back up all data before proceeding.
+
+          You can access the RHMAP documentation at
+
+          https://access.redhat.com/documentation/en-us/red_hat_mobile_application_platform/{{ current_version }}/html/core_administration_and_installation_guide/backing-up-a-core
+
+          https://access.redhat.com/documentation/en-us/red_hat_mobile_application_platform/{{ current_version }}/html/mbaas_administration_and_installation_guide/backing-up-an-mbaas
+
+          Hit enter to continue or ctrl + c to cancel
+
+-
+  name: "Beginning upgrade..."
+  hosts: master
+  vars_files:
+    - "../roles/preflight_checks/vars/{{ project_type }}.yml"
+  roles:
+    - {role: rhmap-rpm, rhmap_version: "{{ upgrade_to_version }}", tags: rpm}
+  tasks:
+
+    -
+      set_fact:
+        rhmap_version: "{{ upgrade_to_version }}"
+
+    -
+      name: "Begin release specific updates"
+      include: "upgrades/{{ project_type }}/{{ upgrade_to_version }}.yml"
+      when: project_type == 'core'
+
+
+    -
+      name: "Begin release specific updates"
+      include: "upgrades/mbaas/{{ upgrade_to_version }}.yml"
+      when: project_type != 'core'
+
+-
+  name: "Patch image versions"
+  hosts: master
+  vars_files:
+    - "../roles/preflight_checks/vars/{{ project_type }}.yml"
+  roles:
+    - {role: patch-images, rhmap_version: "{{ upgrade_to_version }}",  updating: true, tags: patch}
+
+
+-
+  name: "Upgrade Complete"
+  hosts: master
+  tasks:
+    -
+      name: "Checking current package version"
+      shell: "ls -l /opt/rhmap/ | awk '{print $9}' | grep  '^[0-9]' | tail -n1"
+      register: pkg_version
+
+    -
+      name: "Compare versions"
+      shell: "echo 'The version you have upgraded to ({{ finish_version }}) is still not up to date with the current package version {{ pkg_version.stdout }}
+
+          [N.B.] Please re-run the upgrade playbook to ensure the upgrade to {{ pkg_version.stdout }} is completed'"
+      register: output
+      when:
+        - upgrade_to_version < pkg_version.stdout
+        - upgrade_type == 'patch'
+
+    -
+      debug: var=output.stdout_lines
+      when: output|changed
+
+    -
+      name: "Compare version"
+      shell: "echo 'Upgrade Complete - The version you have upgraded to ({{ finish_version }}) is the most recent version available for RHMAP'"
+      register: output
+      when:
+        - upgrade_type == 'release'
+        - upgrade_to_version == pkg_version.stdout
+
+    -
+      debug: var=output.stdout_lines
+      when: output|changed

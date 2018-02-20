@@ -1,0 +1,22 @@
+
+- name: "Prepare infrastructure for installation"
+  hosts: core
+  remote_user: root
+  roles:
+    - {role: preflight_checks, tags: preflight_checks}
+  vars_files:
+    - "../roles/preflight_checks/vars/core.yml"
+
+- name: "Check for and update to nodejs 6 for image-streams"
+  hosts: master
+  roles:
+    - {role: image-streams, tags: preflight_checks}
+  vars_files:
+    - "../roles/preflight_checks/vars/core.yml"
+
+
+- name: "Enable Docker to access container images of RHMAP components"
+  hosts: master,core
+  remote_user: root
+  roles:
+    - {role: rhmap-rpm, tags: rpm}

@@ -1,0 +1,77 @@
+---
+
+-
+  name: "Checking outbound HTTP connection"
+  environment:
+    http_proxy: "{{ proxy_url | default('') }}"
+    https_proxy: "{{ proxy_url | default('') }}"
+  uri:
+    url: "{{ url_to_check | default('https://www.npmjs.com') }}"
+  ignore_errors: yes
+  register: output
+
+-
+  name: "Fail if HTTP check did not succeed and strict mode is not disabled"
+  fail:
+    msg:  "Checking outbound HTTP connection failed. Check outbound internet connection or set up HTTP proxy variables."
+  when:
+    - strict_mode
+    - output.status is undefined or output.status != 200
+
+-
+  name: "Fail if minimum vCPU requirements not met on all nodes"
+  fail:
+   msg: "The minimum required virtual CPUS for RHMAP Core installation is {{ min_required_vCPUS }}. {{ ansible_processor_vcpus }} detected"
+  when:
+    - ansible_processor_vcpus | int <  min_required_vCPUS | int
+    - strict_mode
+
+-
+  name: "Fail if minimum memory requirements not met on all nodes"
+  fail:
+   msg: "{{ required_mem_mb_threshold | int }} MB RAM are required to run RHMAP Core or MBaaS. {{ ansible_memtotal_mb }} MB detected "
+  when:
+    -  ansible_memtotal_mb | int < required_mem_mb_threshold | int
+    -  strict_mode
+
+-
+  name: "Get available memory"
+  register: mem_available
+  shell: cat /proc/meminfo | grep MemAvailable | grep -o -E '[0-9]+'
+  changed_when: False
+
+-
+  name: "Increment total free memory"
+  set_fact: total_free_mem="{{ mem_available.stdout | int  +  total_free_mem | default(0) }}"
+
+-
+  debug:
+    msg: "Warning !!!! System {{ inventory_hostname }} has less than {{ warning_kb_value }} kb of available memory. Detected {{ mem_available.stdout}} kb"
+  when: mem_available.stdout | int  <  warning_kb_value
+
+-
+  pause:
+    prompt: "There is less than a total of {{ warning_kb_value }} available memory on all nodes combined. This may not be adequate to install RHMAP Core. Would you like to continue? ctr+c then A to abort. Hit enter to continue"
+  when:
+    - total_free_mem < warning_kb_value
+    - not strict_mode|bool
+
+-
+  name: "Testing for wildcard certificate"
+  # try to determine if we have a valid wildcard cert installed on the OpenShift router.
+  # It is just to make sure the standard installation is met.
+  register: cert_test
+  shell: echo | openssl s_client -connect test.{{ cluster_hostname }}:443 -tls1_2 2>/dev/null | openssl x509 -noout -subject | grep -o "CN=.*" | cut -c 4-
+  failed_when: not cert_test.stdout | match('^\*\.?([a-z\d][a-z\d-]*[a-z\d]\.)+[a-z]+$')
+  changed_when: False
+  when:
+    - cluster_hostname is defined
+    - cluster_hostname != ''
+  ignore_errors: true
+  run_once: true
+
+
+- pause:
+    prompt: "Failed to verify that a wildcard certificate exists for the cluster hostname provided. Are you sure you want to continue?"
+  when: cert_test|failed
+

@@ -1,0 +1,22 @@
+---
+
+min_required_vCPUS: 2
+required_mem_mb_threshold: 7000
+warning_kb_value: 4000000
+required_100_pv: 0
+required_50_pv: 0
+required_25_pv: 1
+required_5_pv: 0
+required_1_pv: 1
+pause_for: 0
+retry_limit: 20
+interval: 30
+role: "mbaas"
+
+# Do not modify
+mongo_replicas: 1
+component_replicas: 1
+strict_mode: false
+rhmap_version: "4.5"
+
+components: ["nagios","mongodb-1","fh-mbaas","fh-messaging","fh-metrics","fh-statsd"]

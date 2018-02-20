@@ -1,0 +1,55 @@
+# Checks introduced to check if the nodejs image stream supports node 6. JIRA ref: RHMAP-16806
+-
+  name: "Check for nodejs image stream presence ** Ignore Errors from this task as image stream may not exist **"
+  command: oc get is nodejs -o json --namespace "{{ openshift_project_name | default('openshift') }}" --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }}
+  register: nodejs_is_check
+  ignore_errors: true
+  run_once: true
+  become: true
+
+-
+  name: "Check nodejs image stream for version 6"
+  command: oc get is nodejs -o jsonpath='{.spec.tags[?(@.name=="6")]}' --namespace "{{ openshift_project_name | default('openshift') }}" --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }}
+  register: nodejs6_check
+  when: nodejs_is_check.rc == 0
+  run_once: true
+  become: true
+
+- 
+  name: "Backup current nodejs image stream"
+  shell: oc get is nodejs -o json --namespace "{{ openshift_project_name | default('openshift') }}" > /tmp/nodejs_backup_is.json --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }}
+  register: backup_result
+  when :  (not nodejs6_check|skipped) and (not nodejs6_check.stdout)
+  run_once: true
+  become: true
+
+-
+  name: "Delete current nodejs image stream"
+  command: oc delete is nodejs --namespace "{{ openshift_project_name | default('openshift') }}" --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }}
+  when:  (nodejs_is_check.rc == 0) and (not backup_result|skipped)
+  register: delete_result
+  run_once: true
+  become: true
+
+-
+  name: "Create nodejs 6 template on server"
+  template:
+    src: ../templates/nodejs_is.json
+    dest: /tmp/nodejs6_is.json
+  run_once: true
+  when:  ((not delete_result|skipped) and (delete_result.rc == 0)) or (nodejs_is_check.rc != 0)
+
+-
+  name: "Create new image stream with node 6 support"
+  command: oc create -f /tmp/nodejs6_is.json --namespace "{{ openshift_project_name | default('openshift') }}" --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }}
+  when:  ((not delete_result|skipped) and (delete_result.rc == 0)) or (nodejs_is_check.rc != 0)
+  register: create_result
+  run_once: true
+  become: true
+
+-
+  name: "Revert to old image stream in event of update failure"
+  command: oc create -f /tmp/nodejs_backup_is.json --namespace "{{ openshift_project_name | default('openshift') }}" --config={{ kubeconfig | default('/etc/origin/master/admin.kubeconfig') }}
+  when: (not create_result|skipped) and (create_result.rc != 0)
+  run_once: true
+  become: true

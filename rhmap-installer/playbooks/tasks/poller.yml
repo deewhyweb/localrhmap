@@ -1,0 +1,63 @@
+
+---
+- block:
+    -
+      pause: seconds={{ pause_for }}
+
+
+    -
+      name: "Getting list of failed Pods"
+      shell: oc get pods --namespace {{ project_name }}  | grep "Error" | awk '{print $1}'
+      register: failed_pods
+      failed_when: False
+      when:
+        - updating is defined and updating
+      changed_when: failed_pods.rc == 0
+
+    -
+      name: "Delete Pods in Error status"
+      shell: oc delete pod {{ item }} --namespace {{ project_name }}
+      register: delete_status
+      when:
+        - failed_pods|changed
+        - failed_pods.stdout_lines
+      with_items: "{{ failed_pods.stdout_lines | default('[]') }}"
+      changed_when: delete_status.rc == 0
+
+    -
+      name: "Verify deployments finished"
+      action: shell oc get pods --namespace {{ project_name }}  |  grep  "deploy"
+      register: result
+      until: not result.stdout
+      retries: "{{ retry_limit }}"
+      delay: "{{ interval }}"
+      failed_when: result.stdout
+      changed_when: False
+
+    -
+      name: "Get deployment list"
+      shell: oc get dc --namespace {{ project_name }}  | awk 'NR > 1 {print$1}'
+      register: dcs
+      changed_when: False
+
+    -
+      name: "Verify Pods are running"
+      action: shell oc get pods --namespace {{ project_name }}  | grep "^{{ item }}-[0-9]*-[.]*"
+      register: result
+      until: "'Running' in result.stdout"
+      retries: "{{ retry_limit }}"
+      delay: "{{ interval }}"
+      with_items: "{{ dcs.stdout_lines | default('[]') }}"
+      changed_when: False
+
+    -
+      name: "Get debug output for project"
+      command: "oc get pods --namespace {{ project_name }} "
+      register: output
+      changed_when: False
+
+    - debug: var=output.stdout_lines
+
+  rescue:
+    -
+      include: cleaner.yml

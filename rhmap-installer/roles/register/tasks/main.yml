@@ -1,0 +1,64 @@
+---
+
+-
+  name: "Register the node with RHSM - This can take some time, please be patient.... "
+  register: output
+  custom_redhat_subscription:
+    state: present
+    username: "{{ rh_username }}"
+    password: "{{ rh_password }}"
+    force_register: "{{force_register|bool}}"
+    pool: '^(Red Hat Mobile Application Platform)$'
+    autosubscribe: true
+  become: true
+  when:
+    - proxy_host is undefined or proxy_host == ""
+-
+  name: "Register the node with RHSM (with HTTP proxy) - This can take some time, please be patient.... "
+  register: output
+  custom_redhat_subscription:
+    state: present
+    username: "{{ rh_username }}"
+    password: "{{ rh_password }}"
+    force_register: "{{force_register|bool}}"
+    pool: '^(Red Hat Mobile Application Platform)$'
+    autosubscribe: true
+    server_proxy_hostname: "{{ proxy_host }}"
+    server_proxy_port: "{{ proxy_port }}"
+  become: true
+  when:
+    - proxy_host is defined
+    - proxy_host != ""
+    - proxy_port is defined
+    - proxy_port != ""
+    - proxy_user is undefined or proxy_user ==  ""
+    - proxy_password is undefined or proxy_password == ""
+
+-
+  name: "Register the node with RHSM (with HTTP proxy and basic auth) - This can take some time, please be patient.... "
+  register: output
+  custom_redhat_subscription:
+    state: present
+    username: "{{ rh_username }}"
+    password: "{{ rh_password }}"
+    force_register: "{{force_register|bool}}"
+    pool: '^(Red Hat Mobile Application Platform)$'
+    autosubscribe: true
+    server_proxy_hostname: "{{ proxy_host }}"
+    server_proxy_port: "{{ proxy_port }}"
+    server_proxy_user:  "{{ proxy_user }}"
+    server_proxy_password:  "{{ proxy_pass }}"
+  become: true
+  when:
+    - proxy_host is defined
+    - proxy_host != ""
+    - proxy_port is defined
+    - proxy_port != ""
+    - proxy_user is defined
+    - proxy_user != ""
+    - proxy_pass is defined
+    - proxy_pass != ""
+
+-
+  debug: var=output.msg
+  when: output|changed

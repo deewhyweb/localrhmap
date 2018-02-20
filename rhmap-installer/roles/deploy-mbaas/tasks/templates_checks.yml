@@ -1,0 +1,29 @@
+---
+
+-
+  block:
+
+  -
+    name: Check the presence of MBaaS templates
+    stat:
+      path: "{{ mbaas_templates_dir }}/{{ item }}.json"
+    register: file_result
+    with_items: ["mongo-standalone", "mongo-replica", "fh-mbaas-components", "rhmap-mbaas-config"]
+    failed_when:
+      - file_result.stat.exists  == false
+
+  rescue:
+
+    -
+      name: "Template not found"
+      pause:
+        prompt: |
+
+          Required templates were not found in the specified directory
+
+          [N.B.] Please check the error message and correct the problem accordingly
+
+          Default path to the templates is /opt/rhmap/v4.x/templates/
+          Also you can specify the path by passing the parameter '-e mbaas_templates_dir=PATH_TO_TEMPLATES'
+
+          Hit Ctrl + c and then 'a' to abort the installation

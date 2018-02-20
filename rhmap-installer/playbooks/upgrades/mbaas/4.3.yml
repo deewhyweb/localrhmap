@@ -1,0 +1,23 @@
+---
+
+-
+  name: 'Create config maps ** Ignore Errors from this task as some objects already exist**'
+  shell: 'oc new-app -f /opt/rhmap/4.3/templates/mbaas/fh-mbaas-template-{{ mongo_replicas }}node.json --namespace {{ project_name }}'
+  ignore_errors: true
+
+-
+  name: "Read list of Mongo dcs"
+  shell: oc get dc --namespace {{ project_name }} | grep mongodb | grep -v NAME | awk '{print $1}'
+  register: dcs
+
+-
+  name: "Patch Mongo container names"
+  shell: "oc patch dc {{ item }} --type='json' \
+          -p='[ {\"op\": \"replace\", \"path\": \"/spec/template/spec/containers/0/name\",\"value\":\"mongodb\" }]' --namespace {{ project_name }}"
+  with_items:
+    - "{{ dcs.stdout_lines}}"
+
+-
+  name: "Deploy new ConfigMap"
+  shell: for i in fh-mbaas fh-messaging fh-metrics fh-statsd; do oc env dc/${i} --from=configmap/node-proxy --namespace {{ project_name }}; done
+

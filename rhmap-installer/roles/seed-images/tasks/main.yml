@@ -1,0 +1,51 @@
+---
+
+-
+  name: "Include release specific image versions"
+  include_vars: ../shared_files/{{ rhmap_version }}.yml
+
+-
+  name: "Install python-docker-py via yum"
+  yum:
+    name: python-docker-py
+    enablerepo: rhel-7-server-extras-rpms
+    state: present
+  environment:
+    http_proxy: "{{ proxy_url | default('') }}"
+    https_proxy: "{{ proxy_url | default('') }}"
+  become: True
+  when: ansible_os_family == 'RedHat'
+
+-
+  name: Install pip via easy_install
+  easy_install:
+    name: pip
+    state: present
+  environment:
+    http_proxy: "{{ proxy_url | default('') }}"
+    https_proxy: "{{ proxy_url | default('') }}"
+  become: True
+  when: ansible_os_family != 'RedHat'
+
+-
+  name: Install docker-py via pip
+  pip:
+    name: docker-py
+    state: present
+  environment:
+    http_proxy: "{{ proxy_url | default('') }}"
+    https_proxy: "{{ proxy_url | default('') }}"
+  become: True
+  when: ansible_os_family != 'RedHat'
+
+-
+  name: "Pull Docker images for RHMAP"
+  docker_image:
+    name: "{{ registry | default('registry.access.redhat.com') }}/{{ item.1.image }}"
+    state: present
+  when: item.0.name in components
+  with_subelements:
+    - "{{ deployments }}"
+    -  containers
+  become: True
+

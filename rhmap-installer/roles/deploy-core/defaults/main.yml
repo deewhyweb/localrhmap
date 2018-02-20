@@ -1,0 +1,22 @@
+---
+
+project_name: "rhmap-core"
+
+monitoring:
+  smtp_server: ""
+  smtp_username: ""
+  smtp_password: ""
+  smtp_from_address: ""
+  rhmap_admin_email: ""
+
+frontend:
+  smtp_server: ""
+  smtp_username: ""
+  smtp_password: ""
+  smtp_port: "25"
+  smtp_auth: "false"
+  smtp_tls: "false"
+  email_replyto: ""
+  git_external_protocol: "https"
+  builder_android_service_host: "farm.us.redhatmobile.com"
+  builder_iphone_service_host: "farm.us.redhatmobile.com"

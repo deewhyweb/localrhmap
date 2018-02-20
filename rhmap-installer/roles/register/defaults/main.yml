@@ -1,0 +1,7 @@
+---
+
+# Must be set if using this role
+rh_username: user@example.com
+rh_password: secret
+force_register: true
+

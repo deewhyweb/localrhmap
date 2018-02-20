@@ -1,0 +1,54 @@
+---
+
+
+core_project_name: "nightly-core"
+mbaas_project_name: "nightly-mbaas"
+domain_name: "rhmap"
+
+core_templates_git_path: "fheng/fh-core-openshift-templates.git"
+mbaas_templates_git_path: "feedhenry/fh-openshift-templates.git"
+core_templates_dir: "/tmp/core-templates"
+mbaas_templates_dir: "/tmp/mbaas-templates"
+ssh_keyfile_location: "~/.ssh/gitkey"
+
+retry_limit: 20
+interval: 30
+delay: 20
+
+monitoring:
+  smtp_server: "localhost"
+  smtp_username: "username"
+  smtp_password: "password"
+  smtp_from_address: "nagios@example.com"
+  rhmap_admin_email: "root@localhost"
+
+infrastructure:
+  pause_for: 20
+
+backend:
+  pause_for: 30
+
+frontend:
+  pause_for: 30
+  smtp_server: "localhost"
+  smtp_username: "username"
+  smtp_password: "password"
+  smtp_port: "25"
+  smtp_auth: "false"
+  smtp_tls: "false"
+  email_replyto: "noreply@localhost"
+  builder_android_service_host: "meh2-builder.feedhenry.net"
+  builder_iphone_service_host: "meh2-builder.feedhenry.net"
+
+strict_mode: false
+min_required_vCPUS: 4
+required_mem_mb_threshold: 7000
+warning_kb_value: 4000000
+required_100_pv: 0
+required_50_pv: 0
+required_25_pv: 3
+required_5_pv: 2
+required_1_pv: 0
+mongo_replicas: 1
+
+
