@@ -1,4 +1,4 @@
-# MTA RHMAP Install
+# RHMAP Local Install
 ## Overview
 The following guide details installation procedures via Ansible for RHMAP (Core and MBaaS) for a local OCP cluster running in Virtualbox.
 These scripts install Core without UPS, as the UPS Pod was failing to start correctly.
