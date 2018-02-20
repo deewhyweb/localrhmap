@@ -3,7 +3,7 @@
   hosts: master
   remote_user: rhc
   vars:
-  root_folder: "/Users/philiphayes/projects/mta/localrhmap"
+  root_folder: "/Users/philiphayes/projects/localrhmap"
   tasks:
   - name: "Copy Templates"
     copy:
