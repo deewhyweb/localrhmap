@@ -19,7 +19,8 @@ Create NFS shares on your Virtual box host.  In OSX edit /etc/exports and list t
 Where username is your username and ip-subnet is the subnet of the Virtualbox host only adapter e.g 192.168.56.0
 
 
-```/Users/<username>/testnfs/32gb -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0
+```
+/Users/<username>/testnfs/32gb -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0
 /Users/<username>/testnfs/nagios -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0
 /Users/<username>/testnfs/mySql -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0
 /Users/<username>/testnfs/mongoDb_replica_1 -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0
@@ -28,10 +29,13 @@ Where username is your username and ip-subnet is the subnet of the Virtualbox ho
 /Users/<username>/testnfs/gitLabShell -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0
 /Users/<username>/testnfs/FHSCM -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0
 /Users/<username>/testnfs/1gb1 -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0
-/Users/<username>/testnfs/1gb2 -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0 ```
+/Users/<username>/testnfs/1gb2 -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0 
+```
 
 Restart the nfs service on the host: 
-``` sudo nfsd restart ```
+``` 
+sudo nfsd restart 
+```
 
 Edit the PV defitions in RHMAP-PV/RHMAP to reflect the correct locations of the nfs shares from the virtualbox host.  The path and server fields will need to be edited.
 
