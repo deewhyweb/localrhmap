@@ -1,13 +1,25 @@
 # MTA RHMAP Install
 ## Overview
 The following guide details installation procedures via Ansible for RHMAP (Core and MBaaS) for a local OCP cluster running in Virtualbox.
+These scripts install Core without UPS, as the UPS Pod was failing to start correctly.
+These scripts also reduce the CPU resources required to allow all PODs to run on a single VM.
 
 ## Prerequisites
-1. A local installation of OCP running on RHEL in Virtualbox.  With Two network controllers, NAT and host only
-2. ssh access to the RHEL VM from the host e.g. ssh root@router
+1. A local installation of OCP running on RHEL in Virtualbox.  With two network controllers, NAT and host only
+2. Guest OS should have 4 CPUs, 8Gb memory, and 60Gb storage
+3. ssh access to the RHEL VM from the host e.g. ssh root@router without password prompt
+4. Edit the node config file to increase the number of allowed pods by editing /etc/origin/node/node-config.yaml.  Under kubeletArguments add max-pods as shown below:
+```
+kubeletArguments:
+  max-pods:
+    - "40"
+```
+5. Restart the node with:
+```
+systemctl restart atomic-openshift-node
+```
 
-## setup
-
+## Network setup and PV configuration
 Setup a host only network on on your virtualbox guest to host.
 ![alt text](./assets/vbox-network.png "Virtual box setup")
 
