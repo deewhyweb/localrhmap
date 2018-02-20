@@ -7,7 +7,7 @@ These scripts also reduce the CPU resources required to allow all PODs to run on
 ## Prerequisites
 1. A local installation of OCP running on RHEL in Virtualbox.  With two network controllers, NAT and host only
 2. Guest OS should have 4 CPUs, 8Gb memory, and 60Gb storage
-3. ssh access to the RHEL VM from the host e.g. ssh root@router without password prompt
+3. ssh access to the RHEL VM from the host e.g. ssh root@ocphost without password prompt
 4. Edit the node config file to increase the number of allowed pods by editing /etc/origin/node/node-config.yaml.  Under kubeletArguments add max-pods as shown below:
 ```
 kubeletArguments:
