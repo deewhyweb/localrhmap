@@ -66,11 +66,11 @@ sudo nfsd restart
 Edit the PV defitions in RHMAP-PV/RHMAP to reflect the correct locations of the nfs shares from the virtualbox host.  The path and server fields will need to be edited.
 
 
-## Core Installation
-1. Change into the rhmap-installer folder and dodify poc-inventory.yml the the correct hostname of your OCP instance
+## Installation
+1. Change into the rhmap-installer folder and modify poc-inventory.yml with the correct hostname of your OCP instance
 2. Execute the following which ensures required files are copied to required servers.
     ```
-    ansible-playbook -i ./pocv-inventory.yml playbooks/copyRequiredFiles.yml
+    ansible-playbook -i ./poc-inventory.yml playbooks/copyRequiredFiles.yml
     ```
 3. Create PV definitions for RHMAP pods.
       ```
@@ -84,8 +84,6 @@ Edit the PV defitions in RHMAP-PV/RHMAP to reflect the correct locations of the 
     ```
 5. Install complete
     * The install will take approximately 15 minutes.  
-    * If errors occur in the following locations they can safely be ignored: 
-      * Health Check Related Errors - these will generally resolve themselves.
 
 6. Final steps
     * From the OCP vm shell run the following command to get the url of RHMAP Core
