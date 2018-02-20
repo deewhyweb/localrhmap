@@ -19,11 +19,25 @@ kubeletArguments:
 systemctl restart atomic-openshift-node
 ```
 
+6. Guest OS should be registered with subscription-manager and attached to the correct Pool for RHMAP.
+```
+subscription-manager list --available
+```
+Find the pool_id for RHMAP subscription:
+```
+sudo subscription-manager attach --pool=<pool_id>
+```
+
+7. The node should be labelled with type=core
+```
+oc label node core-1 type=core
+```
+
 ## Network setup and PV configuration
 Setup a host only network on on your virtualbox guest to host.
 ![alt text](./assets/vbox-network.png "Virtual box setup")
 
-Configure the vm to use the host only network
+Configure the vm to use the host only network and NAT network
 ![alt text](./assets/vm-network1.png "Virtual box setup")
 ![alt text](./assets/vm-network2.png "Virtual box setup")
 
