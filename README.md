@@ -1,6 +1,10 @@
 # MTA RHMAP Install
 ## Overview
-The following guide details installation procedures via Ansible for RHMAP (Core and MBaaS) for a local OCP cluster running in Virtualbox
+The following guide details installation procedures via Ansible for RHMAP (Core and MBaaS) for a local OCP cluster running in Virtualbox.
+
+## Prerequisites
+1. A local installation of OCP running on RHEL in Virtualbox.  With Two network controllers, NAT and host only
+2. ssh access to the RHEL VM from the host e.g. ssh root@router
 
 ## setup
 
@@ -25,6 +29,11 @@ Where username is your username and ip-subnet is the subnet of the Virtualbox ho
 /Users/<username>/testnfs/FHSCM -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0
 /Users/<username>/testnfs/1gb1 -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0
 /Users/<username>/testnfs/1gb2 -maproot=root:wheel -network <ip-subnet> -mask 255.255.255.0 ```
+
+Restart the nfs service on the host: 
+``` sudo nfsd restart ```
+
+Edit the PV defitions in RHMAP-PV/RHMAP to reflect the correct locations of the nfs shares from the virtualbox host.  The path and server fields will need to be edited.
 
 
 ## Core Installation
