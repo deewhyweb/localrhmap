@@ -82,10 +82,8 @@ Edit the PV defitions in RHMAP-PV/RHMAP to reflect the correct locations of the 
     ```
     ansible-playbook -i ./poc-inventory.yml playbooks/poc.yml --extra-vars "core_templates_dir=/root/templates/core mbaas_templates_dir=/root/templates/mbaas" --skip-tags=rpm
     ```
-5. Install complete
-    * The install will take approximately 15 minutes.  
 
-6. Final steps
+5. Final steps
     * From the OCP vm shell run the following command to get the url of RHMAP Core
     ```
     oc project rhmap-poc-core
@@ -99,6 +97,10 @@ Edit the PV defitions in RHMAP-PV/RHMAP to reflect the correct locations of the 
 
 4. Create MBaaS target:
 ![alt text](./assets/mbaas-target.png "MBaaS target screenshot")
+
+5. Create the MBaaS environment
+From the studio goto Admin -> Environments -> Create Environment
+Follow the instructions to create a new environment
 
 ## Tear Down
 1. Delete the projects
