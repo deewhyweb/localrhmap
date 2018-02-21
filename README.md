@@ -72,7 +72,7 @@ Edit the PV defitions in RHMAP-PV/RHMAP to reflect the correct locations of the 
     ```
     ansible-playbook -i ./poc-inventory.yml playbooks/copyRequiredFiles.yml
     ```
-3. Create PV definitions for RHMAP pods.
+3. Create Persistant volumes.
       ```
       ansible-playbook -i poc-inventory.yml playbooks/createPVs.yml
       ```
