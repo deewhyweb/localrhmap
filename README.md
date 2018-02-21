@@ -89,7 +89,7 @@ Edit the PV defitions in RHMAP-PV/RHMAP to reflect the correct locations of the 
     oc project rhmap-poc-core
     oc get route rhmap --template "https://{{.spec.host}}"
     ```
-    * To get the administrator login details, from osmaster1 run:
+    * To get the administrator login details, from OCP vm run:
     ```
     oc env dc/millicore --list | grep FH_ADMIN
     ```
