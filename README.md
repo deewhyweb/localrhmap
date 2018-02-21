@@ -102,7 +102,7 @@ Edit the PV defitions in RHMAP-PV/RHMAP to reflect the correct locations of the 
 
 ## Tear Down
 1. Delete the projects
-From osmaster1 enter the following:
+From the OCP vm shell enter the following:
     ```
     oc delete project rhmap-poc-core
     oc delete project rhmap-poc-mbaas
